@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-embedded-hal = "0.2.3"
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
 
 
 [features]

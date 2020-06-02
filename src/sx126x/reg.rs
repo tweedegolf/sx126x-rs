@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 #[repr(u16)]
-pub enum Reg {
+pub enum Register {
     /// Non-standard DIOx control
     DioxOutputEnable = 0x0580,
     /// Non-standard DIOx control
@@ -90,6 +90,6 @@ pub enum Reg {
     XtbTrim = 0x0912,
     /// Non-standard DIO3 control
     Dio3OutputVoltageControl = 0x0920,
-    /// Event Mask
+    /// Used to clear events
     EventMask = 0x0944,
 }

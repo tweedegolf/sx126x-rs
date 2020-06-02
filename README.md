@@ -10,3 +10,6 @@ This project aims to implement the following functionalities:
  - Send a LoRaWAN message
  - Receive a LoRaWAN message
  - Minimize power usage 
+
+
+[SX1261/62 Datasheet](https://drive.google.com/file/d/1_Fcxab7j0AaavaMOK3st-larq5S1oWow/view?usp=sharing)

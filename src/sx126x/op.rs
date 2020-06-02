@@ -1,41 +1,117 @@
 #[allow(dead_code)]
 
+pub trait Operation {
+    type Raw: AsRef<[u8]>;
+    fn op_code() -> u8;
+
+    fn into_raw(&self) -> Self::Raw;
+
+    fn from_raw(raw: &Self::Raw) -> Self;
+}
+
+macro_rules! op {
+    ($op:ident, $op_raw_ty:ty, $op_code:literal, $comment:literal, $raw_len:literal, |$raw_ident:ident| $from_raw:tt) => {
+        #[doc=$comment]
+        pub struct $op {
+            raw: $op_raw_ty
+        }
+
+        impl Operation for $op {
+            type Raw = [u8; $raw_len];
+
+            #[inline(always)]
+            fn op_code() -> u8 {
+                $op_code
+            }
+
+            fn into_raw(&self) -> Self::Raw {                
+                // TODO: Use MaybeUninit
+                let mut raw = [0; $raw_len];
+                raw[0] = $op_code;
+                // TODO: verify that this works correctly
+                if $raw_len > 0 {
+                    unsafe { core::ptr::replace(&mut raw[1] as *mut _ as *mut $op_raw_ty, self.raw); }
+                }
+                raw
+            }
+
+            fn from_raw($raw_ident: &Self::Raw) -> Self
+                {$from_raw}
+        }
+
+    };
+}
+
+macro_rules! zb_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8; 0], $op_code, $comment, 2, |_raw| { Self { raw: [] } });
+    };
+}
+
+/// Defines a single-byte payload operation
+macro_rules! sb_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8; 1], $op_code, $comment, 2, |raw| { Self { raw: [raw[1]] } });
+    };
+}
+
+/// Defines a dual-byte payload operation
+macro_rules! db_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8;2], $op_code, $comment, 3, |raw| { Self { raw: [raw[1], raw[2]] } });
+    };
+}
+
+/// Defines a triple-byte payload operation
+macro_rules! tb_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8;3], $op_code, $comment, 4, |raw| { Self { raw: [raw[1], raw[2], raw[3]] } });
+    };
+}
+
+/// Defines a quadruple-byte payload operation
+macro_rules! qb_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8;4], $op_code, $comment, 5, |raw| { Self { raw: [raw[1], raw[2], raw[3], raw[4]] } });
+    };
+}
+
+/// Defines a hexuple-byte payload operation
+macro_rules! hb_op {
+    ($op:ident, $op_code:literal, $comment:literal) => {
+        op!($op, [u8;6], $op_code, $comment, 7, |raw| { Self { raw: [raw[1], raw[2], raw[3], raw[4], raw[5], raw[6]] } });
+    };
+}
+
 pub mod mode {
-    #[repr(u8)]
-    pub enum OpCode {
-        /// Set Chip in SLEEP mode
-        SetSleep = 0x84,
-        /// Set Chip in STDBY_RC or STDBY_XOSC mode
-        SetStandby = 0x80,
-        /// Set Chip in Frequency Synthesis mode
-        SetFs = 0xC1,
-        /// Set Chip in Tx mode
-        SetTx = 0x83,
-        /// Set Chip in Rx mode
-        SetRx = 0x82,
-        /// Stop Rx timeout on Sync Word/Header or preamble detection
-        StopTimerOnPreamble = 0x9F,
-        /// Store values of RTC setup for listen mode and if period parameter
-        /// is not 0, set chip into RX mode
-        SetRxDutyCycle = 0x94,
-        /// Set chip into RX mode with passed CAD parameters
-        SetCad = 0xC5,
-        /// Set chip into TX mode with infinite carrier wave settings
-        SetTxContinuousWave = 0xD1,
-        /// Set chip into TX mode with infinite preamble settings
-        SetTxInfinitePreamble = 0xD2,
-        /// Select LDO or DC_DC for CFG_XOSC, FS, RX, or TX mode
-        SetRegulatorMode = 0x96,
-        /// Calibrate the RC13, RC64, ADC, PLL, Image according to parameter
-        Calibrate = 0x89,
-        /// Launches an image calibration at the given frequencies
-        CalibrateImage = 0x98,
-        /// Configure the Duty Cycle, Max output power, device for the PA
-        /// for SX1261 or SX1262
-        SetPaConfig = 0x95,
-        /// Defines into which mode the chip goes after a TX/RX done
-        SetRxTxFallbackMode = 0x93,
+    use super::Operation;
+    impl SetSleep {
+        pub fn new(warm_start: bool, rtc_wake: bool) -> Self {
+            let mut raw = 0x00;
+            if warm_start {
+                raw |= 1 << 2;
+            }
+            if rtc_wake {
+                raw |= 1 << 0
+            }
+            Self { raw: [raw] }
+        }
     }
+    sb_op!(SetSleep, 0x84, "Set Chip in SLEEP mode");
+    sb_op!(SetStandby, 0x80, "Set Chip in STDBY_RC or STDBY_XOSC mode");
+    zb_op!(SetFs, 0xC1, "Set Chip in Frequency Synthesis mode");
+    tb_op!(SetTx, 0x83, "Set Chip in Tx mode");
+    tb_op!(SetRx, 0x82, "Set Chip in Rx mode");
+    sb_op!(StopTimerOnPreamble, 0x9F, "Stop Rx timeout on Sync Word/Header or preamble detection");
+    sext_op!(SetRxDutyCycle, 0x94, "Store values of RTC setup for listen mode and if period parameter is not 0, set chip into RX mode");
+    zb_op!(SetCad, 0xC5, "Set chip into RX mode with passed CAD parameters");
+    zb_op!(SetTxContinuousWave, 0xD1, "Set chip into TX mode with infinite carrier wave settings");
+    zb_op!(SetTxInfinitePreamble, 0xD2, "Set chip into TX mode with infinite preamble settings");
+    sb_op!(SetRegulatorMode, 0x96, "Select LDO or DC_DC for CFG_XOSC, FS, RX, or TX mode");
+    sb_op!(Calibrate, 0x89, "Calibrate the RC13, RC64, ADC, PLL, Image according to parameter");
+    tb_op!(CalibrateImage, 0x98, "Launches an image calibration at the given frequencies");
+    qb_op!(SetPaConfig, 0x95, "Configure the Duty Cycle, Max output power, device for the PA for SX1261 or SX1262");
+    sb_op!(SetRxTxFallbackMode, 0x93, "Defines into which mode the chip goes after a TX/RX done");
 }
 
 pub mod access {
