@@ -1,0 +1,17 @@
+[target.thumbv7em-none-eabi]
+runner = 'gdb-multiarch -x openocd.gdb'
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
+
+[target.thumbv7em-none-eabihf]
+runner = 'gdb-multiarch -x openocd.gdb'
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"
+
+[net]
+git-fetch-with-cli = true

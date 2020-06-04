@@ -7,10 +7,31 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cortex-m-rt = "0.6.12"
+cortex-m = "0.6.2"
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
+cortex-m-semihosting = "0.3.5"
+nb = "0.1.2"
 
+[dependencies.stm32f3xx-hal]
+version = "0.4.2"
+features = ["stm32f303xc", "rt"]
 
 [features]
-default = ["sx126x"]
+default = ["sx126x", "f3"]
 sx126x = []
 sx127x = []
+f3 = []
+f1 = []
+l4 = []
+
+[profile.dev]
+opt-level = 1
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = false # better optimizations
+
+[profile.release]
+opt-level = 3
+codegen-units = 1 # less threads, better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations

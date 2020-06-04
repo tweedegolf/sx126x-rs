@@ -2,22 +2,31 @@
 
 pub trait Operation {
     type Raw: AsRef<[u8]>;
+    type Payload: AsRef<[u8]>;
     fn op_code() -> u8;
 
     fn into_raw(&self) -> Self::Raw;
 
-    fn from_raw(raw: &Self::Raw) -> Self;
+    fn with_payload(payload: Self::Payload) -> Self;
+
+    fn wait_us() -> u32;
 }
 
 macro_rules! op {
-    ($op:ident, $op_raw_ty:ty, $op_code:literal, $comment:literal, $raw_len:literal, |$raw_ident:ident| $from_raw:tt) => {
+    ($op:ident, $payload_len:literal, $op_code:literal, $comment:literal, $raw_len:literal, $wait_us:literal, |$raw_ident:ident| $from_raw:tt) => {
         #[doc=$comment]
         pub struct $op {
-            raw: $op_raw_ty
+            payload: [u8; $payload_len]
+        }
+
+        impl $op {
+            fn from_raw($raw_ident: &<Self as Operation>::Raw) -> Self
+                {$from_raw}
         }
 
         impl Operation for $op {
             type Raw = [u8; $raw_len];
+            type Payload = [u8; $payload_len];
 
             #[inline(always)]
             fn op_code() -> u8 {
@@ -25,61 +34,69 @@ macro_rules! op {
             }
 
             fn into_raw(&self) -> Self::Raw {                
-                // TODO: Use MaybeUninit
+                // TODO: Use MaybeUninit to avoid zeroing
                 let mut raw = [0; $raw_len];
                 raw[0] = $op_code;
                 // TODO: verify that this works correctly
                 if $raw_len > 0 {
-                    unsafe { core::ptr::replace(&mut raw[1] as *mut _ as *mut $op_raw_ty, self.raw); }
+                    unsafe { core::ptr::replace(&mut raw[1] as *mut _ as *mut [u8; $payload_len], self.payload); }
                 }
                 raw
             }
 
-            fn from_raw($raw_ident: &Self::Raw) -> Self
-                {$from_raw}
+            fn with_payload(payload: Self::Payload) -> Self {
+                Self { payload }
+            }
+
+            #[inline(always)]
+            fn wait_us() -> u32 { 
+                $wait_us
+            }
         }
 
     };
 }
 
+/// Defines a single-byte payload operation
 macro_rules! zb_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8; 0], $op_code, $comment, 2, |_raw| { Self { raw: [] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 0, $op_code, $comment, 2, $wait_us, |_payload| { Self { payload: [] } });
     };
 }
 
 /// Defines a single-byte payload operation
 macro_rules! sb_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8; 1], $op_code, $comment, 2, |raw| { Self { raw: [raw[1]] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 1, $op_code, $comment, 2, $wait_us, |payload| { Self { payload: [payload[1]] } });
     };
 }
 
 /// Defines a dual-byte payload operation
+#[allow(unused_macros)]
 macro_rules! db_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8;2], $op_code, $comment, 3, |raw| { Self { raw: [raw[1], raw[2]] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 2, $op_code, $comment, 3,  $wait_us,|payload| { Self { payload: [payload[1], payload[2]] } });
     };
 }
 
 /// Defines a triple-byte payload operation
 macro_rules! tb_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8;3], $op_code, $comment, 4, |raw| { Self { raw: [raw[1], raw[2], raw[3]] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 3, $op_code, $comment, 4,  $wait_us,|payload| { Self { payload: [payload[1], payload[2], payload[3]] } });
     };
 }
 
 /// Defines a quadruple-byte payload operation
 macro_rules! qb_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8;4], $op_code, $comment, 5, |raw| { Self { raw: [raw[1], raw[2], raw[3], raw[4]] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 4, $op_code, $comment, 5,  $wait_us,|payload| { Self { payload: [payload[1], payload[2], payload[3], payload[4]] } });
     };
 }
 
 /// Defines a hexuple-byte payload operation
 macro_rules! hb_op {
-    ($op:ident, $op_code:literal, $comment:literal) => {
-        op!($op, [u8;6], $op_code, $comment, 7, |raw| { Self { raw: [raw[1], raw[2], raw[3], raw[4], raw[5], raw[6]] } });
+    ($op:ident, $op_code:literal, $comment:literal, $wait_us:literal) => {
+        op!($op, 6, $op_code, $comment, 7,  $wait_us,|payload| { Self { payload: [payload[1], payload[2], payload[3], payload[4], payload[5], payload[6]] } });
     };
 }
 
@@ -87,31 +104,31 @@ pub mod mode {
     use super::Operation;
     impl SetSleep {
         pub fn new(warm_start: bool, rtc_wake: bool) -> Self {
-            let mut raw = 0x00;
+            let mut payload = 0x00;
             if warm_start {
-                raw |= 1 << 2;
+                payload |= 1 << 2;
             }
             if rtc_wake {
-                raw |= 1 << 0
+                payload |= 1 << 0
             }
-            Self { raw: [raw] }
+            Self { payload: [payload] }
         }
     }
-    sb_op!(SetSleep, 0x84, "Set Chip in SLEEP mode");
-    sb_op!(SetStandby, 0x80, "Set Chip in STDBY_RC or STDBY_XOSC mode");
-    zb_op!(SetFs, 0xC1, "Set Chip in Frequency Synthesis mode");
-    tb_op!(SetTx, 0x83, "Set Chip in Tx mode");
-    tb_op!(SetRx, 0x82, "Set Chip in Rx mode");
-    sb_op!(StopTimerOnPreamble, 0x9F, "Stop Rx timeout on Sync Word/Header or preamble detection");
-    sext_op!(SetRxDutyCycle, 0x94, "Store values of RTC setup for listen mode and if period parameter is not 0, set chip into RX mode");
-    zb_op!(SetCad, 0xC5, "Set chip into RX mode with passed CAD parameters");
-    zb_op!(SetTxContinuousWave, 0xD1, "Set chip into TX mode with infinite carrier wave settings");
-    zb_op!(SetTxInfinitePreamble, 0xD2, "Set chip into TX mode with infinite preamble settings");
-    sb_op!(SetRegulatorMode, 0x96, "Select LDO or DC_DC for CFG_XOSC, FS, RX, or TX mode");
-    sb_op!(Calibrate, 0x89, "Calibrate the RC13, RC64, ADC, PLL, Image according to parameter");
-    tb_op!(CalibrateImage, 0x98, "Launches an image calibration at the given frequencies");
-    qb_op!(SetPaConfig, 0x95, "Configure the Duty Cycle, Max output power, device for the PA for SX1261 or SX1262");
-    sb_op!(SetRxTxFallbackMode, 0x93, "Defines into which mode the chip goes after a TX/RX done");
+    sb_op!(SetSleep, 0x84, "Set Chip in SLEEP mode", 0);
+    sb_op!(SetStandby, 0x80, "Set Chip in STDBY_RC or STDBY_XOSC mode", 0);
+    zb_op!(SetFs, 0xC1, "Set Chip in Frequency Synthesis mode", 0);
+    tb_op!(SetTx, 0x83, "Set Chip in Tx mode", 0);
+    tb_op!(SetRx, 0x82, "Set Chip in Rx mode", 0);
+    sb_op!(StopTimerOnPreamble, 0x9F, "Stop Rx timeout on Sync Word/Header or preamble detection", 0);
+    hb_op!(SetRxDutyCycle, 0x94, "Store values of RTC setup for listen mode and if period parameter is not 0, set chip into RX mode", 0);
+    zb_op!(SetCad, 0xC5, "Set chip into RX mode with passed CAD parameters", 0);
+    zb_op!(SetTxContinuousWave, 0xD1, "Set chip into TX mode with infinite carrier wave settings", 0);
+    zb_op!(SetTxInfinitePreamble, 0xD2, "Set chip into TX mode with infinite preamble settings", 0);
+    sb_op!(SetRegulatorMode, 0x96, "Select LDO or DC_DC for CFG_XOSC, FS, RX, or TX mode", 0);
+    sb_op!(Calibrate, 0x89, "Calibrate the RC13, RC64, ADC, PLL, Image according to parameter", 0);
+    tb_op!(CalibrateImage, 0x98, "Launches an image calibration at the given frequencies", 0);
+    qb_op!(SetPaConfig, 0x95, "Configure the Duty Cycle, Max output power, device for the PA for SX1261 or SX1262", 0);
+    sb_op!(SetRxTxFallbackMode, 0x93, "Defines into which mode the chip goes after a TX/RX done", 0);
 }
 
 pub mod access {
