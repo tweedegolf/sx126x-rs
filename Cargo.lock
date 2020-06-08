@@ -116,6 +116,7 @@ dependencies = [
  "cortex-m-semihosting",
  "embedded-hal",
  "nb",
+ "stm32f1xx-hal",
  "stm32f3xx-hal",
 ]
 
@@ -188,6 +189,34 @@ dependencies = [
  "cortex-m",
  "usb-device",
  "vcell",
+]
+
+[[package]]
+name = "stm32f1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "849b1e8d9bcfd792c9d9178cf86165d299a661c26e35d9322ae9382d3f3fe460"
+dependencies = [
+ "bare-metal",
+ "cortex-m",
+ "cortex-m-rt",
+ "vcell",
+]
+
+[[package]]
+name = "stm32f1xx-hal"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb2ba185a8d04d4e52901219aa8b1055566a8f1587809b5b68c9ade84ed73c45"
+dependencies = [
+ "as-slice",
+ "cast",
+ "cortex-m",
+ "cortex-m-rt",
+ "embedded-hal",
+ "nb",
+ "stm32f1",
+ "void",
 ]
 
 [[package]]

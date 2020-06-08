@@ -16,13 +16,19 @@ nb = "0.1.2"
 [dependencies.stm32f3xx-hal]
 version = "0.4.2"
 features = ["stm32f303xc", "rt"]
+optional = true
+
+[dependencies.stm32f1xx-hal]
+version = "0.6.0"
+features = ["stm32f103", "rt", "medium"]
+optional = true
 
 [features]
-default = ["sx126x", "f3"]
+default = ["sx126x", "f1"]
 sx126x = []
 sx127x = []
-f3 = []
-f1 = []
+f3 = ["stm32f3xx-hal"]
+f1 = ["stm32f1xx-hal"]
 l4 = []
 
 [profile.dev]
