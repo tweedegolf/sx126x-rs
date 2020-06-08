@@ -5,8 +5,9 @@ use cortex_m_rt::entry;
 use cortex_m_semihosting::{hprintln};
 use stm32f1xx_hal::prelude::*;
 
-mod ring_buf;
 mod sx126x;
+mod usart;
+mod ring_buf;
 
 use ring_buf::RingBuf;
 use sx126x::SX126x;
@@ -51,6 +52,8 @@ fn main() -> ! {
     );
 
     let (mut usart2_tx, mut usart2_rx) = usart2.split();
+    let mut serial_tx = usart::UsartWrite::init(usart2_tx);
+
     hprintln!("Setting op SPI 3 for LoRa modem").unwrap();
     
     let spi1_sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
@@ -79,9 +82,9 @@ fn main() -> ! {
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
 
     loop {        
-        led_pin.set_high();
+        led_pin.set_high().unwrap();
         delay.delay_ms(100u8);
-        led_pin.set_low();
+        led_pin.set_low().unwrap();
         delay.delay_ms(100u8);
     }
 }
