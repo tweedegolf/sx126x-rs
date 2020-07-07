@@ -64,7 +64,7 @@ where
             busy_pin,
             ant_pin,
         };
-        
+
         delay.delay_ms(1000);
         // Wait for modem to become available
         sx.wait_on_busy(delay);
@@ -235,7 +235,8 @@ where
     ) -> Result<(), SpiWriteError<TSPI>> {
         let s = self.slave_select(delay).unwrap();
         let tcxo_delay: [u8; 3] = tcxo_delay.into();
-        let r = spi.write(&[0x97, tcxo_voltage as u8])
+        let r = spi
+            .write(&[0x97, tcxo_voltage as u8])
             .and_then(|_| spi.write(&tcxo_delay));
         let s = s;
         r

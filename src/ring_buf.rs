@@ -9,7 +9,7 @@ pub struct RingBuf<T> {
     data: [MaybeUninit<T>; BUF_SIZE],
 }
 
-impl<T: Copy,> RingBuf<T> {
+impl<T: Copy> RingBuf<T> {
     pub fn new() -> Self {
         interrupt_free(|_| Self {
             start: usize::default(),
@@ -19,11 +19,11 @@ impl<T: Copy,> RingBuf<T> {
     }
 
     pub fn len(&self) -> usize {
-            if self.start <= self.end {
-                self.end - self.start
-            } else {
-                BUF_SIZE - self.start + self.end
-            }
+        if self.start <= self.end {
+            self.end - self.start
+        } else {
+            BUF_SIZE - self.start + self.end
+        }
     }
 
     pub fn get(&self, i: usize) -> nb::Result<T, Infallible> {
@@ -35,17 +35,17 @@ impl<T: Copy,> RingBuf<T> {
     }
 
     pub fn push_back(&mut self, item: T) -> nb::Result<(), Infallible> {
-            if self.len() == BUF_SIZE {
-                Err(nb::Error::WouldBlock)
+        if self.len() == BUF_SIZE {
+            Err(nb::Error::WouldBlock)
+        } else {
+            unsafe { self.data[self.end].as_mut_ptr().write(item) };
+            if self.end == BUF_SIZE {
+                self.end = 0;
             } else {
-                unsafe { self.data[self.end].as_mut_ptr().write(item) };
-                if self.end == BUF_SIZE {
-                    self.end = 0;
-                } else {
-                    self.end += 1;
-                }
-                Ok(())
+                self.end += 1;
             }
+            Ok(())
+        }
     }
 
     pub fn pop_front(&mut self) -> nb::Result<T, Infallible> {
