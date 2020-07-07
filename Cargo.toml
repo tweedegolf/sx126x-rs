@@ -24,12 +24,13 @@ features = ["stm32f103", "rt", "medium"]
 optional = true
 
 [features]
-default = ["sx126x", "f1"]
+default = ["sx126x", "f1", "tcxo"]
 sx126x = []
 sx127x = []
 f3 = ["stm32f3xx-hal"]
 f1 = ["stm32f1xx-hal"]
 l4 = []
+tcxo  = []
 
 [profile.dev]
 opt-level = 1

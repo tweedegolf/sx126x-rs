@@ -79,6 +79,12 @@ impl Into<u8> for CalibParam {
     }
 }
 
+impl From<u8> for CalibParam {
+    fn from(val: u8) -> Self {
+        Self { inner: val & 0x7F }
+    }
+}
+
 impl CalibParam {
     pub const fn new(
         rc64k_en: bool,
@@ -89,7 +95,7 @@ impl CalibParam {
         adc_bulk_p_en: bool,
         image_en: bool,
     ) -> Self {
-        let mut inner = (rc64k_en as u8) << 0
+        let inner = (rc64k_en as u8) << 0
             | (rc13_en as u8) << 1
             | (pll_en as u8) << 2
             | (adc_pulse_en as u8) << 3

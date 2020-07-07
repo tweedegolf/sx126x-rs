@@ -10,7 +10,8 @@ mod sx126x;
 mod usart;
 
 use ring_buf::RingBuf;
-use sx126x::SX126x;
+use sx126x::{SX126x, Config as LoRaConfig};
+use sx126x::op::{PacketType::LORA, StandbyConfig::StbyRc, TcxoDelay, TcxoVoltage::Volt_1_7};
 
 use stm32f1xx_hal::delay::Delay;
 use stm32f1xx_hal::serial::Config;
@@ -25,7 +26,9 @@ unsafe fn panic_handler(info: &core::panic::PanicInfo) -> ! {
 
 #[entry]
 fn main() -> ! {
-    hprintln!("init").unwrap();
+
+    use embedded_hal::digital::v2::OutputPin;
+    // hprintln!("init").unwrap();
 
     let peripherals = stm32::Peripherals::take().unwrap();
     let core_peripherals = stm32::CorePeripherals::take().unwrap();
@@ -54,7 +57,7 @@ fn main() -> ! {
     let (mut usart2_tx, mut usart2_rx) = usart2.split();
     let mut serial_tx = usart::UsartWrite::init(usart2_tx);
 
-    hprintln!("Setting op SPI 3 for LoRa modem").unwrap();
+    // hprintln!("Setting op SPI 3 for LoRa modem").unwrap();
 
     let spi1_sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
     let spi1_miso = gpioa.pa6.into_floating_input(&mut gpioa.crl);
@@ -78,13 +81,23 @@ fn main() -> ! {
     let lora_nss = gpioa.pa8.into_push_pull_output(&mut gpioa.crh);
     let lora_busy = gpiob.pb5.into_floating_input(&mut gpiob.crl);
     let _lora_dio_1 = gpioa.pa10.into_floating_input(&mut gpioa.crh);
-    let lora_ant = gpioa.pa9.into_floating_input(&mut gpioa.crh);
+    let lora_ant = gpioa.pa9.into_push_pull_output(&mut gpioa.crh);
 
     let mut delay = Delay::new(core_peripherals.SYST, clocks);
 
-    hprintln!("Setting op LoRa modem").unwrap();
+    // hprintln!("Setting op LoRa modem").unwrap();
 
-    let conf = todo!();
+    let conf = LoRaConfig {
+        freq_1: 0xD7,
+        freq_2: 0xDB,
+        packet_type: LORA,
+        standby_config: StbyRc,
+        
+        sync_word: 0x1424, // Private networks
+        tcxo_delay: TcxoDelay::from_millis(100),
+        tcxo_voltage: Volt_1_7,
+
+    };
 
     let mut lora = SX126x::init(
         &mut spi1,
@@ -94,9 +107,8 @@ fn main() -> ! {
     )
     .unwrap();
 
-    hprintln!("Done setting op LoRa modem").unwrap();
+    // hprintln!("Done setting op LoRa modem").unwrap();
 
-    use embedded_hal::digital::v2::OutputPin;
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
 
     loop {
