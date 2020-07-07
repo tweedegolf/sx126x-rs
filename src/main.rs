@@ -70,11 +70,15 @@ fn main() -> ! {
     let lora_nss = gpioa.pa8.into_push_pull_output(&mut gpioa.crh);
     let lora_busy = gpiob.pb5.into_floating_input(&mut gpiob.crl);
     let _lora_dio_1 = gpioa.pa10.into_floating_input(&mut gpioa.crh);
+    let lora_ant = gpioa.pa9.into_floating_input(&mut gpioa.crh);
+    
     let mut delay = Delay::new(core_peripherals.SYST, clocks);
     
     hprintln!("Setting op LoRa modem").unwrap();
     
-    let mut lora = SX126x::init(&mut spi1, &mut delay, (lora_nreset, lora_nss, lora_busy)).unwrap();
+    let conf = todo!();
+
+    let mut lora = SX126x::init(&mut spi1, &mut delay, (lora_nreset, lora_nss, lora_busy, lora_ant), conf).unwrap();
 
     hprintln!("Done setting op LoRa modem").unwrap();
 
