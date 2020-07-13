@@ -9,7 +9,7 @@ set print asm-demangle on
 break rust_begin_unwind
 
 # *try* to stop at the user entry point (it might be gone due to inlining)
-
+break main
 
 monitor arm semihosting enable
 

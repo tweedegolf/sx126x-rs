@@ -53,38 +53,42 @@ where
         pins: (TNSS, TNRST, TBUSY, TANT),
         conf: Config<impl Into<u8>, impl Into<u8>>,
     ) -> Result<Self, SpiWriteError<TSPI>> {
-        let (mut nss, mut nrst_pin, busy_pin, ant_pin) = pins;
+        let (mut nss_pin, mut nrst_pin, busy_pin, ant_pin) = pins;
         nrst_pin.set_high().unwrap();
-        nss.set_high().unwrap();
+        nss_pin.set_high().unwrap();
 
         let mut sx = Self {
             spi: PhantomData,
-            slave_select: SlaveSelect::new(nss),
+            slave_select: SlaveSelect::new(nss_pin),
             nrst_pin,
             busy_pin,
             ant_pin,
         };
 
-        delay.delay_ms(1000);
-        // Wait for modem to become available
-        sx.wait_on_busy(delay);
+        let mut spi = sx.slave_select(spi, delay).unwrap();
+        spi.write(b"test 123")?;
+        drop(spi);
 
-        sx.reset(delay).unwrap();
+        // delay.delay_ms(1000);
+        // // Wait for modem to become available
+        // sx.wait_on_busy(delay);
 
-        //Wakeup
-        sx.wakeup(spi, delay);
+        // sx.reset(delay).unwrap();
 
-        sx.set_standby(spi, delay, conf.standby_config)?;
+        // //Wakeup
+        // sx.wakeup(spi, delay);
 
-        #[cfg(feature = "tcxo")]
-        {
-            sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
-            sx.calibrate(spi, delay, 0x7F.into())?;
-        }
-        sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
+        // sx.set_standby(spi, delay, conf.standby_config)?;
 
-        sx.set_packet_type(spi, delay, conf.packet_type)?;
-        sx.set_sync_word(spi, delay, conf.sync_word)?;
+        // #[cfg(feature = "tcxo")]
+        // {
+        //     sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
+        //     sx.calibrate(spi, delay, 0x7F.into())?;
+        // }
+        // sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
+
+        // sx.set_packet_type(spi, delay, conf.packet_type)?;
+        // sx.set_sync_word(spi, delay, conf.sync_word)?;
 
         Ok(sx)
     }
@@ -102,32 +106,32 @@ where
             &sync_word.to_le_bytes(),
         )
     }
-    pub fn set_packet_type(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn set_packet_type<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         packet_type: PacketType,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x8A, packet_type as u8])
     }
 
-    pub fn set_standby(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn set_standby<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         standby_config: StandbyConfig,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x80, standby_config as u8])
     }
 
-    pub fn get_status(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn get_status<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<Status, SpiTransferError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         let mut result = [NOP];
         spi.transfer(&mut [0xC0])
             .and_then(|_| spi.transfer(&mut result))?;
@@ -135,37 +139,37 @@ where
         Ok(result[0].into())
     }
 
-    pub fn calibrate_image(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn calibrate_image<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         freq_1: impl Into<u8>,
         freq_2: impl Into<u8>,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x98, freq_1.into(), freq_2.into()])
     }
 
-    pub fn calibrate(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn calibrate<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         calib_param: CalibParam,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x89, calib_param.into()])
     }
 
-    pub fn write_register(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn write_register<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         register: Register,
         data: &[u8],
     ) -> Result<(), SpiWriteError<TSPI>> {
         let start_addr = (register as u16).to_le_bytes();
 
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         let r = spi
             .write(&[0x0D])
             .and_then(|_| spi.write(&start_addr))
@@ -174,16 +178,16 @@ where
         r
     }
 
-    pub fn read_register(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn read_register<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         start_addr: u16,
         result: &mut [u8],
     ) -> Result<(), SpiTransferError<TSPI>> {
         debug_assert!(result.len() >= 1);
         let mut start_addr = start_addr.to_le_bytes();
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
 
         spi.transfer(&mut [0x1D])
             .and_then(|_| spi.transfer(&mut start_addr))
@@ -191,72 +195,69 @@ where
         Ok(())
     }
 
-    pub fn write_buffer(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn write_buffer<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         data: &[u8],
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x0E, offset]).and_then(|_| spi.write(data))
     }
 
-    pub fn read_buffer(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn read_buffer<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         result: &mut [u8],
     ) -> Result<(), SpiTransferError<TSPI>> {
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
         let mut header = [0x1E, offset, NOP];
         spi.transfer(&mut header)
             .and_then(|_| spi.transfer(result))
             .map(|_| {})
     }
 
-    pub fn set_dio2_as_rf_switch_ctrl(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn set_dio2_as_rf_switch_ctrl<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         enable: bool,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x9D, enable as u8])
     }
 
-    pub fn set_dio3_as_tcxo_ctrl(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn set_dio3_as_tcxo_ctrl<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         tcxo_voltage: TcxoVoltage,
         tcxo_delay: TcxoDelay,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
         let tcxo_delay: [u8; 3] = tcxo_delay.into();
-        let r = spi
-            .write(&[0x97, tcxo_voltage as u8])
-            .and_then(|_| spi.write(&tcxo_delay));
-        let s = s;
-        r
+        spi.write(&[0x97, tcxo_voltage as u8])
+            .and_then(|_| spi.write(&tcxo_delay))
     }
 
-    pub fn clear_device_errors(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn clear_device_errors<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let s = self.slave_select(delay);
+        let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x07, 0x00, 0x00])
     }
 
-    pub fn get_device_errors(
-        &mut self,
-        spi: &mut TSPI,
+    pub fn get_device_errors<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<DeviceErrors, SpiTransferError<TSPI>> {
-        let s = self.slave_select(delay).unwrap();
+        let mut spi = self.slave_select(spi, delay).unwrap();
         let mut result = [NOP; 2];
         spi.transfer(&mut [0x17, NOP])
             .and_then(|_| spi.transfer(&mut result))?;
@@ -288,9 +289,9 @@ where
         }
     }
 
-    fn wakeup(
-        &mut self,
-        spi: &mut TSPI,
+    fn wakeup<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), SpiTransferError<TSPI>> {
         cortex_m::interrupt::free(|_| {
@@ -303,15 +304,16 @@ where
         Ok(())
     }
 
-    fn slave_select(
-        &mut self,
+    fn slave_select<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<SlaveSelectGuard<TNSS>, OutputPinError<TNSS>> {
-        self.wait_on_busy(delay);
-        let s = self.slave_select.select()?;
+    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, OutputPinError<TNSS>> {
+        // self.wait_on_busy(delay);
+        let s = self.slave_select.select(spi)?;
         // Table 8-1: Data sheet specifies a minumum delay of 32ns between falling edge of nss and sck setup,
         // though embedded_hal provides no trait for delaying in nanosecond resolution.
-        delay.delay_us(1);
+        // delay.delay_us(1);
         Ok(s)
     }
 }
@@ -326,19 +328,46 @@ impl<TNSS: OutputPin> SlaveSelect<TNSS> {
     }
 }
 
-struct SlaveSelectGuard<'nss, TNSS: OutputPin> {
+struct SlaveSelectGuard<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> {
     nss: &'nss mut TNSS,
+    spi: &'spi mut TSPI,
 }
 
 impl<TNSS: OutputPin> SlaveSelect<TNSS> {
-    fn select(&mut self) -> Result<SlaveSelectGuard<TNSS>, OutputPinError<TNSS>> {
+    fn select<'spi, TSPI: Write<u8> + Transfer<u8>>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
+    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, OutputPinError<TNSS>> {
         self.nss.set_low()?;
-        Ok(SlaveSelectGuard { nss: &mut self.nss })
+        Ok(SlaveSelectGuard {
+            nss: &mut self.nss,
+            spi,
+        })
     }
 }
 
-impl<'nss, TNSS: OutputPin> Drop for SlaveSelectGuard<'nss, TNSS> {
+impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Drop
+    for SlaveSelectGuard<'nss, 'spi, TNSS, TSPI>
+{
     fn drop(&mut self) {
         let _ = self.nss.set_high();
+    }
+}
+
+impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Write<u8>
+    for SlaveSelectGuard<'nss, 'spi, TNSS, TSPI>
+{
+    type Error = <TSPI as Write<u8>>::Error;
+    fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
+        self.spi.write(words)
+    }
+}
+
+impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Transfer<u8>
+    for SlaveSelectGuard<'nss, 'spi, TNSS, TSPI>
+{
+    type Error = <TSPI as Transfer<u8>>::Error;
+    fn transfer<'w>(&mut self, words: &'w mut [u8]) -> Result<&'w [u8], Self::Error> {
+        self.spi.transfer(words)
     }
 }
