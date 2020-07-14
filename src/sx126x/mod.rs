@@ -65,30 +65,27 @@ where
             ant_pin,
         };
 
-        let mut spi = sx.slave_select(spi, delay).unwrap();
-        spi.write(b"test 123")?;
-        drop(spi);
-
-        // delay.delay_ms(1000);
-        // // Wait for modem to become available
+        delay.delay_ms(1000);
+        // Wait for modem to become available
         // sx.wait_on_busy(delay);
 
-        // sx.reset(delay).unwrap();
+        sx.reset(delay).unwrap();
 
-        // //Wakeup
-        // sx.wakeup(spi, delay);
+        //Wakeup
+        // TODO: return on error
+        let _ = sx.wakeup(spi, delay);
 
-        // sx.set_standby(spi, delay, conf.standby_config)?;
+        sx.set_standby(spi, delay, conf.standby_config)?;
 
-        // #[cfg(feature = "tcxo")]
-        // {
-        //     sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
-        //     sx.calibrate(spi, delay, 0x7F.into())?;
-        // }
-        // sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
-
-        // sx.set_packet_type(spi, delay, conf.packet_type)?;
-        // sx.set_sync_word(spi, delay, conf.sync_word)?;
+        #[cfg(feature = "tcxo")]
+        {
+            sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
+            sx.calibrate(spi, delay, 0x7F.into())?;
+        }
+        sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
+        let _ = sx.set_ant_enabled(true);
+        sx.set_packet_type(spi, delay, conf.packet_type)?;
+        sx.set_sync_word(spi, delay, conf.sync_word)?;
 
         Ok(sx)
     }
@@ -103,7 +100,7 @@ where
             spi,
             delay,
             Register::LoRaSyncWordMsb,
-            &sync_word.to_le_bytes(),
+            &sync_word.to_be_bytes(),
         )
     }
     pub fn set_packet_type<'spi>(
@@ -167,7 +164,7 @@ where
         register: Register,
         data: &[u8],
     ) -> Result<(), SpiWriteError<TSPI>> {
-        let start_addr = (register as u16).to_le_bytes();
+        let start_addr = (register as u16).to_be_bytes();
 
         let mut spi = self.slave_select(spi, delay).unwrap();
         let r = spi
@@ -186,7 +183,7 @@ where
         result: &mut [u8],
     ) -> Result<(), SpiTransferError<TSPI>> {
         debug_assert!(result.len() >= 1);
-        let mut start_addr = start_addr.to_le_bytes();
+        let mut start_addr = start_addr.to_be_bytes();
         let mut spi = self.slave_select(spi, delay).unwrap();
 
         spi.transfer(&mut [0x1D])
@@ -239,8 +236,7 @@ where
     ) -> Result<(), SpiWriteError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let tcxo_delay: [u8; 3] = tcxo_delay.into();
-        spi.write(&[0x97, tcxo_voltage as u8])
-            .and_then(|_| spi.write(&tcxo_delay))
+        spi.write(&[0x97, tcxo_voltage as u8, tcxo_delay[0], tcxo_delay[1], tcxo_delay[2]])
     }
 
     pub fn clear_device_errors<'spi>(
@@ -309,7 +305,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<SlaveSelectGuard<TNSS, TSPI>, OutputPinError<TNSS>> {
-        // self.wait_on_busy(delay);
+        self.wait_on_busy(delay);
         let s = self.slave_select.select(spi)?;
         // Table 8-1: Data sheet specifies a minumum delay of 32ns between falling edge of nss and sck setup,
         // though embedded_hal provides no trait for delaying in nanosecond resolution.

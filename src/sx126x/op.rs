@@ -131,9 +131,12 @@ impl Into<[u8; 3]> for TcxoDelay {
 }
 
 impl TcxoDelay {
-    pub fn from_millis(millis: u32) -> Self {
-        let inner = (millis as f32 / 15.625) as u32;
-        let inner = inner.to_be_bytes();
+    pub fn from_us(us: u32) -> Self {
+        // 15.625 == 125/8
+        // 8/125 ~ 131/2048
+        // 2048 = 2^11
+        let x = (us * 131) >> 11;
+        let inner = x.to_le_bytes();
         let inner = [inner[2], inner[1], inner[0]];
         Self { inner }
     }

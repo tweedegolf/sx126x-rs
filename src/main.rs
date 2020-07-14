@@ -16,12 +16,7 @@ use stm32f1xx_hal::delay::Delay;
 use stm32f1xx_hal::gpio::State::High;
 use stm32f1xx_hal::spi::{Mode as SpiMode, Phase, Polarity, Spi};
 use stm32f1xx_hal::stm32;
-
-#[panic_handler]
-unsafe fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-    cortex_m_semihosting::hprintln!("ERROR! {:?}", info).unwrap();
-    loop {}
-}
+use panic_semihosting as _;
 
 #[entry]
 fn main() -> ! {
@@ -76,17 +71,16 @@ fn main() -> ! {
         standby_config: StbyRc,
 
         sync_word: 0x1424, // Private networks
-        tcxo_delay: TcxoDelay::from_millis(100),
+        tcxo_delay: TcxoDelay::from_us(5000),
         tcxo_voltage: Volt_1_7,
     };
 
     let mut lora = SX126x::init(
         &mut spi1,
         &mut delay,
-        (lora_nreset, lora_nss, lora_busy, lora_ant),
+        (lora_nss, lora_nreset, lora_busy, lora_ant),
         conf,
-    )
-    .unwrap();
+    ).unwrap();
 
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
     loop {
