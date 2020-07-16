@@ -11,4 +11,6 @@ pub struct Config<TF1, TF2> {
     #[cfg(feature = "tcxo")]
     pub tcxo_voltage: TcxoVoltage,
     pub packet_params: PacketParams,
+    pub mod_params: ModParams,
+    pub tx_params: TxParams,
 }

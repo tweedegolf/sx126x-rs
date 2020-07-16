@@ -19,6 +19,7 @@ pub mod err;
 pub mod irq;
 pub mod tx;
 pub mod packet;
+pub mod modulation;
 
 pub use init::*;
 pub use status::*;
@@ -28,3 +29,4 @@ pub use err::*;
 pub use irq::*;
 pub use tx::*;
 pub use packet::*;
+pub use modulation::*;

@@ -88,8 +88,8 @@ where
         sx.set_packet_type(spi, delay, conf.packet_type)?;
         sx.set_sync_word(spi, delay, conf.sync_word)?;
         sx.set_packet_params(spi, delay, conf.packet_params)?;
+        sx.set_mod_params(spi, delay, conf.mod_params)?;
 
-        // TODO: Set modulation params
         // TODO: Set tx params
 
         Ok(sx)
@@ -320,6 +320,26 @@ where
         let mut spi = self.slave_select(spi, delay).unwrap();
         let params: [u8; 9] = params.into();
         spi.write(&[0x8C]).and_then(|_| spi.write(&params))
+    }
+
+    pub fn set_mod_params<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        params: ModParams,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        let params: [u8; 8] = params.into();
+        spi.write(&[0x8B]).and_then(|_| spi.write(&params))
+    }
+
+    pub fn set_tx_params<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        params: TxParams,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        
     }
 
     pub fn write_bytes<'spi, 'data>(
