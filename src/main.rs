@@ -4,19 +4,25 @@
 use cortex_m_rt::entry;
 use stm32f1xx_hal::prelude::*;
 
+mod gpio;
 mod ring_buf;
 mod sx126x;
 mod usart;
 
-use sx126x::op::{PacketType::LORA, StandbyConfig::StbyRc, TcxoDelay, TcxoVoltage::Volt_1_7};
-use sx126x::{Config as LoRaConfig, SX126x};
+use gpio::DisconnectedPin;
+use sx126x::conf::Config as LoRaConfig;
+use sx126x::op::{
+    packet::lora::LoRaPacketParams, PacketType::LORA, StandbyConfig::StbyRc, TcxoDelay,
+    TcxoVoltage::Volt1_7,
+};
+use sx126x::SX126x;
 
 use embedded_hal::digital::v2::OutputPin;
+use panic_semihosting as _;
 use stm32f1xx_hal::delay::Delay;
 use stm32f1xx_hal::gpio::State::High;
 use stm32f1xx_hal::spi::{Mode as SpiMode, Phase, Polarity, Spi};
 use stm32f1xx_hal::stm32;
-use panic_semihosting as _;
 
 #[entry]
 fn main() -> ! {
@@ -32,6 +38,7 @@ fn main() -> ! {
     let mut gpioa = peripherals.GPIOA.split(&mut rcc.apb2);
     let mut gpiob = peripherals.GPIOB.split(&mut rcc.apb2);
 
+    // Init SPI1
     let spi1_sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
     let spi1_miso = gpioa.pa6.into_floating_input(&mut gpioa.crl);
     let spi1_mosi = gpioa.pa7.into_alternate_push_pull(&mut gpioa.crl);
@@ -50,6 +57,8 @@ fn main() -> ! {
         clocks,
         &mut rcc.apb2,
     );
+
+    // Init pins
     let lora_nreset = gpioa
         .pa0
         .into_push_pull_output_with_state(&mut gpioa.crl, High);
@@ -57,31 +66,51 @@ fn main() -> ! {
         .pa8
         .into_push_pull_output_with_state(&mut gpioa.crh, High);
     let lora_busy = gpiob.pb5.into_floating_input(&mut gpiob.crl);
-    let _lora_dio_1 = gpioa.pa10.into_floating_input(&mut gpioa.crh);
+    let lora_dio1 = gpioa.pa10.into_floating_input(&mut gpioa.crh);
+    let lora_dio2 = DisconnectedPin;
     let lora_ant = gpioa
         .pa9
         .into_push_pull_output_with_state(&mut gpioa.crh, High);
 
+    let lora_pins = (
+        lora_nss,
+        lora_nreset,
+        lora_busy,
+        lora_ant,
+        lora_dio1,
+        lora_dio2,
+    );
+
     let mut delay = Delay::new(core_peripherals.SYST, clocks);
 
+    // Init LoRa modem
+    let packet_params = LoRaPacketParams::default().set_preamble_len(8).into();
+
     let conf = LoRaConfig {
-        freq_1: 0xD7,
+        freq_1: 0xD7, // 868MHz (EU)
         freq_2: 0xDB,
         packet_type: LORA,
         standby_config: StbyRc,
-
         sync_word: 0x1424, // Private networks
         tcxo_delay: TcxoDelay::from_us(5000),
-        tcxo_voltage: Volt_1_7,
+        tcxo_voltage: Volt1_7,
+        packet_params,
     };
 
     let mut lora = SX126x::init(
         &mut spi1,
         &mut delay,
-        (lora_nss, lora_nreset, lora_busy, lora_ant),
+        lora_pins,
         conf,
-    ).unwrap();
+    )
+    .unwrap();
 
+    // Send LoRa message
+    let timeout = sx126x::op::tx::TxTimeout::from_us(0); // timeout disabled
+    lora.write_bytes(&mut spi1, &mut delay, b"Hello, LoRa World!", timeout)
+        .unwrap();
+
+    // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
     loop {
         led_pin.set_high().unwrap();
