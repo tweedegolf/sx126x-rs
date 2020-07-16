@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 // Divide a value in a quick fashion using multiplication and shifting
 macro_rules! divide {
     ($v: ident, 15.625) => {
