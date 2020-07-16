@@ -84,14 +84,12 @@ fn main() -> ! {
 
     let mut delay = Delay::new(core_peripherals.SYST, clocks);
 
-    // Init LoRa modem
+    // // Init LoRa modem
     let packet_params = LoRaPacketParams::default().set_preamble_len(8).into();
     let mod_params = LoraModParams::default().into();
     let tx_params = TxParams::default().set_power_dbm(14).set_ramp_time(RampTime::Ramp200u);
 
     let conf = LoRaConfig {
-        freq_1: 0xD7, // 868MHz (EU)
-        freq_2: 0xDB,
         packet_type: LORA,
         standby_config: StbyRc,
         sync_word: 0x1424, // Private networks
@@ -100,14 +98,15 @@ fn main() -> ! {
         packet_params,
         mod_params,
         tx_params,
+        rf_freq: 868_000_000, // 868MHz (EU)
     };
 
     let mut lora = SX126x::init(&mut spi1, &mut delay, lora_pins, conf).unwrap();
 
-    // Send LoRa message
-    let timeout = sx126x::op::tx::TxTimeout::from_us(0); // timeout disabled
-    lora.write_bytes(&mut spi1, &mut delay, b"Hello, LoRa World!", timeout)
-        .unwrap();
+    // // Send LoRa message
+    // let timeout = sx126x::op::tx::TxTimeout::from_us(0); // timeout disabled
+    // lora.write_bytes(&mut spi1, &mut delay, b"Hello, LoRa World!", timeout)
+    //     .unwrap();
 
     // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);

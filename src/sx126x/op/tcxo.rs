@@ -24,7 +24,7 @@
     }
 
     impl TcxoDelay {
-        pub fn from_us(us: u32) -> Self {
+        pub const fn from_us(us: u32) -> Self {
             let inner = divide!(us, 15.625);
             let inner = inner.to_le_bytes();
             let inner = [inner[2], inner[1], inner[0]];

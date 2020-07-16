@@ -7,7 +7,6 @@ use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
-
 use super::conf::Config;
 use super::op::*;
 use super::reg::*;
@@ -20,6 +19,13 @@ type SpiWriteError<TSPI> = <TSPI as Write<u8>>::Error;
 type SpiTransferError<TSPI> = <TSPI as Transfer<u8>>::Error;
 
 const NOP: u8 = 0x00;
+
+// TODO: support other XTAL frequencies
+const XTAL_FREQ_HZ: u32 = 32_000_000; // 32 MHz
+// The farthest right-shift we can do on 32M while keeping a whole number is 11
+const XTAL_FREQ_SHIFT: u8 = 11;
+const XTAL_FREQ_SHIFTED: u32 = XTAL_FREQ_HZ >> XTAL_FREQ_SHIFT; 
+const DIVISOR_FREQ_SHIFT: u8 = 25 - XTAL_FREQ_SHIFT;
 
 
 pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1, TDIO2> {
@@ -47,7 +53,7 @@ where
         spi: &mut TSPI,
         delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
         pins: (TNSS, TNRST, TBUSY, TANT, TDIO1, TDIO2),
-        conf: Config<impl Into<u8>, impl Into<u8>>,
+        conf: Config,
     ) -> Result<Self, SpiWriteError<TSPI>> {
         let (mut nss_pin, mut nrst_pin, busy_pin, ant_pin, dio1_pin, dio2_pin) = pins;
         nrst_pin.set_high().unwrap();
@@ -66,7 +72,7 @@ where
         delay.delay_ms(1000);
         // Wait for modem to become available
         // sx.wait_on_busy(delay);
-
+        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
         sx.reset(delay).unwrap();
 
         //Wakeup
@@ -89,9 +95,8 @@ where
         sx.set_packet_params(spi, delay, conf.packet_params)?;
         sx.set_mod_params(spi, delay, conf.mod_params)?;
         sx.set_tx_params(spi, delay, conf.tx_params)?;
-
-        // TODO: Set rf frequency, set interrupt mode
-    
+        sx.calibrate_image(spi, delay, CalibImageFreq::from_rf_freq(conf.rf_freq))?;
+        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
 
         Ok(sx)
     }
@@ -146,11 +151,11 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-        freq_1: impl Into<u8>,
-        freq_2: impl Into<u8>,
+        freq: CalibImageFreq,
     ) -> Result<(), SpiWriteError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x98, freq_1.into(), freq_2.into()])
+        let freq: [u8; 2] = freq.into();
+        spi.write(&[0x98]).and_then(|_| spi.write(&freq))
     }
 
     pub fn calibrate<'spi>(
@@ -345,6 +350,20 @@ where
         spi.write(&[0x8E]).and_then(|_| spi.write(&params))
     }
 
+    pub fn set_rf_frequency<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        rf_freq: u32,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        // 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25
+        todo!("This is incorrect");
+        let freq = (rf_freq * XTAL_FREQ_SHIFTED) >> DIVISOR_FREQ_SHIFT;
+        let freq = freq.to_be_bytes();
+        spi.write(&[0x86]).and_then(|_| spi.write(&freq))
+    }
+
     pub fn write_bytes<'spi, 'data>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -357,7 +376,8 @@ where
         self.set_tx(spi, delay, timeout)?;
         // Set tx mode
         // Wait for busy line to go low
-        todo!();
+        todo!()
+        
     }
 
     fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {

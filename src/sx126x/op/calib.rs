@@ -35,3 +35,32 @@ impl CalibParam {
         Self { inner }
     }
 }
+
+#[derive(Copy, Clone)]
+#[repr(u16)]
+pub enum CalibImageFreq {
+    MHz430_440 = 0x6B6F,
+    MHz470_510 = 0x7581,
+    MHz779_787 = 0xC1C5,
+    MHz863_870 = 0xD7DB,
+    MHz902_928 = 0xE1E9,
+}
+
+impl Into<[u8; 2]> for CalibImageFreq {
+    fn into(self) -> [u8; 2] {
+        (self as u16).to_be_bytes()
+    }
+}
+
+impl CalibImageFreq {
+    pub const fn from_rf_freq(rf_freq: u32) -> Self {
+        match rf_freq / 1000000 {
+            902..=928 => Self::MHz902_928,
+            863..=870 => Self::MHz863_870,
+            779..=787 => Self::MHz779_787,
+            470..=510 => Self::MHz470_510,
+            430..=440 => Self::MHz430_440,
+            _ => Self::MHz902_928 // Default
+        }
+    }
+}
