@@ -20,14 +20,6 @@ type SpiTransferError<TSPI> = <TSPI as Transfer<u8>>::Error;
 
 const NOP: u8 = 0x00;
 
-// TODO: support other XTAL frequencies
-const XTAL_FREQ_HZ: u32 = 32_000_000; // 32 MHz
-// The farthest right-shift we can do on 32M while keeping a whole number is 11
-const XTAL_FREQ_SHIFT: u8 = 11;
-const XTAL_FREQ_SHIFTED: u32 = XTAL_FREQ_HZ >> XTAL_FREQ_SHIFT; 
-const DIVISOR_FREQ_SHIFT: u8 = 25 - XTAL_FREQ_SHIFT;
-
-
 pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1, TDIO2> {
     spi: PhantomData<TSPI>,
     slave_select: SlaveSelect<TNSS>,
@@ -68,11 +60,7 @@ where
             dio1_pin,
             dio2_pin,
         };
-
-        delay.delay_ms(1000);
-        // Wait for modem to become available
-        // sx.wait_on_busy(delay);
-        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
+        
         sx.reset(delay).unwrap();
 
         //Wakeup
@@ -350,17 +338,28 @@ where
         spi.write(&[0x8E]).and_then(|_| spi.write(&params))
     }
 
+    /// 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25
+    /// -> RFfrequecy ~ ((RFfreq >> 12) * (Fxtal >> 12)) >> 1
     pub fn set_rf_frequency<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         rf_freq: u32,
     ) -> Result<(), SpiWriteError<TSPI>> {
+        // TODO: support other XTAL frequencies
+        const XTAL_FREQ_HZ: u32 = 32_000_000; // 32 MHz
+        // Shifting right by 12 avoids an overflow for all supported frequencies
+        const XTAL_FREQ_SHIFT: u8 = 12;
+        const XTAL_FREQ_SHIFTED: u32 = XTAL_FREQ_HZ >> XTAL_FREQ_SHIFT;
+        const DIVISOR_FREQ_SHIFT: u8 = 25 - (2 * XTAL_FREQ_SHIFT);
+
         let mut spi = self.slave_select(spi, delay).unwrap();
-        // 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25
-        todo!("This is incorrect");
-        let freq = (rf_freq * XTAL_FREQ_SHIFTED) >> DIVISOR_FREQ_SHIFT;
-        let freq = freq.to_be_bytes();
+
+        let x = rf_freq >> XTAL_FREQ_SHIFT;
+        let y = x * XTAL_FREQ_SHIFTED;
+        let z = y >> DIVISOR_FREQ_SHIFT;
+
+        let freq = z.to_be_bytes();
         spi.write(&[0x86]).and_then(|_| spi.write(&freq))
     }
 
@@ -371,13 +370,14 @@ where
         data: &'data [u8],
         timeout: TxTimeout,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        // set packet params
+        // Write data to buffer
         self.write_buffer(spi, delay, 0x00, data)?;
-        self.set_tx(spi, delay, timeout)?;
         // Set tx mode
+        self.set_tx(spi, delay, timeout)?;
         // Wait for busy line to go low
-        todo!()
-        
+        self.wait_on_busy(delay);
+        // Write completed!
+        Ok(())
     }
 
     fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {

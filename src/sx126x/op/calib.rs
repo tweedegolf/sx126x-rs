@@ -39,11 +39,11 @@ impl CalibParam {
 #[derive(Copy, Clone)]
 #[repr(u16)]
 pub enum CalibImageFreq {
-    MHz430_440 = 0x6B6F,
-    MHz470_510 = 0x7581,
-    MHz779_787 = 0xC1C5,
-    MHz863_870 = 0xD7DB,
-    MHz902_928 = 0xE1E9,
+    MHz430_440 = 0x6B_6F,
+    MHz470_510 = 0x75_81,
+    MHz779_787 = 0xC1_C5,
+    MHz863_870 = 0xD7_DB,
+    MHz902_928 = 0xE1_E9,
 }
 
 impl Into<[u8; 2]> for CalibImageFreq {
