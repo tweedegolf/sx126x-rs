@@ -9,22 +9,22 @@ macro_rules! divide {
     };
 }
 
-pub mod init;
-pub mod status;
 pub mod calib;
-pub mod tcxo;
 pub mod err;
+pub mod init;
 pub mod irq;
-pub mod tx;
-pub mod packet;
 pub mod modulation;
+pub mod packet;
+pub mod status;
+pub mod tcxo;
+pub mod tx;
 
-pub use init::*;
-pub use status::*;
 pub use calib::*;
-pub use tcxo::*;
 pub use err::*;
+pub use init::*;
 pub use irq::*;
-pub use tx::*;
-pub use packet::*;
 pub use modulation::*;
+pub use packet::*;
+pub use status::*;
+pub use tcxo::*;
+pub use tx::*;

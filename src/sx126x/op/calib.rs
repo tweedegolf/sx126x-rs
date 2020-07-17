@@ -60,7 +60,7 @@ impl CalibImageFreq {
             779..=787 => Self::MHz779_787,
             470..=510 => Self::MHz470_510,
             430..=440 => Self::MHz430_440,
-            _ => Self::MHz902_928 // Default
+            _ => Self::MHz902_928, // Default
         }
     }
 }

@@ -8,6 +8,7 @@ pub struct Config {
     pub tcxo_delay: TcxoDelay,
     #[cfg(feature = "tcxo")]
     pub tcxo_voltage: TcxoVoltage,
+    pub calib_param: CalibParam,
     pub packet_params: PacketParams,
     pub mod_params: ModParams,
     pub tx_params: TxParams,

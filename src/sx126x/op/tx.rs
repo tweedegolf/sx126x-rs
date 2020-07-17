@@ -50,7 +50,7 @@ impl Default for TxParams {
             power_dbm: 0,
             ramp_time: RampTime::Ramp10u,
         }
-    }    
+    }
 }
 
 impl Into<[u8; 2]> for TxParams {

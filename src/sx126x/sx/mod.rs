@@ -60,19 +60,22 @@ where
             dio1_pin,
             dio2_pin,
         };
-        
+
+        // Reset the sx
         sx.reset(delay).unwrap();
 
         //Wakeup
         // TODO: return on error
         let _ = sx.wakeup(spi, delay);
 
+        // Go to standby mode
         sx.set_standby(spi, delay, conf.standby_config)?;
 
+        // Configure pins
         #[cfg(feature = "tcxo")]
         {
             sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
-            sx.calibrate(spi, delay, 0x7F.into())?;
+            sx.calibrate(spi, delay, conf.calib_param)?;
         }
         sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
         let _ = sx.set_ant_enabled(true);
@@ -348,7 +351,7 @@ where
     ) -> Result<(), SpiWriteError<TSPI>> {
         // TODO: support other XTAL frequencies
         const XTAL_FREQ_HZ: u32 = 32_000_000; // 32 MHz
-        // Shifting right by 12 avoids an overflow for all supported frequencies
+                                              // Shifting right by 12 avoids an overflow for all supported frequencies
         const XTAL_FREQ_SHIFT: u8 = 12;
         const XTAL_FREQ_SHIFTED: u32 = XTAL_FREQ_HZ >> XTAL_FREQ_SHIFT;
         const DIVISOR_FREQ_SHIFT: u8 = 25 - (2 * XTAL_FREQ_SHIFT);
