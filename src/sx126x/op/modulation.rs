@@ -69,7 +69,7 @@ pub mod lora {
         fn default() -> Self {
             Self {
                 spread_factor: LoRaSpreadFactor::SF7,
-                bandwith: LoraBandWidth::BW500,
+                bandwith: LoraBandWidth::BW125,
                 coding_rate: LoraCodingRate::CR4_5,
                 low_dr_opt: false,
             }

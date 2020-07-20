@@ -96,7 +96,7 @@ fn main() -> ! {
         .into();
     let mod_params = LoraModParams::default().into();
     let tx_params = TxParams::default()
-        .set_power_dbm(14)
+        .set_power_dbm(13)
         .set_ramp_time(RampTime::Ramp200u);
 
     let conf = LoRaConfig {
