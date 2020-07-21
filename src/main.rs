@@ -54,9 +54,15 @@ fn main() -> ! {
     };
     let spi1_freq = 100.khz();
 
+    let spi1_pins = (
+        spi1_sck,  // D13
+        spi1_miso, // D12
+        spi1_mosi, // D11
+    );
+
     let spi1 = &mut Spi::spi1(
         peripherals.SPI1,
-        (spi1_sck, spi1_miso, spi1_mosi),
+        spi1_pins,
         &mut afio.mapr,
         spi1_mode,
         spi1_freq,
@@ -72,7 +78,7 @@ fn main() -> ! {
         .pa8
         .into_push_pull_output_with_state(&mut gpioa.crh, High);
     let lora_busy = gpiob.pb5.into_floating_input(&mut gpiob.crl);
-    let lora_dio1 = gpioa.pa10.into_floating_input(&mut gpioa.crh);
+    let lora_dio1 = gpiob.pb10.into_floating_input(&mut gpiob.crh);
     let lora_dio2 = DisconnectedPin;
     let lora_ant = gpioa
         .pa9
@@ -114,15 +120,14 @@ fn main() -> ! {
 
     let mut lora = SX126x::init(spi1, delay, lora_pins, conf).unwrap();
 
-    
     let timeout = sx126x::op::tx::TxTimeout::from_us(0x000000); // timeout disabled
 
     // Blink LED to indicate the whole program has run to completion
-    let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
+    let mut led_pin = gpioa.pa10.into_push_pull_output(&mut gpioa.crh);
     loop {
         led_pin.set_high().unwrap();
         // Send LoRa message
-        
+
         lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout)
             .unwrap();
         led_pin.set_low().unwrap();
