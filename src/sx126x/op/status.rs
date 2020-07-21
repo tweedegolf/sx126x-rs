@@ -3,8 +3,16 @@ pub struct Status {
     inner: u8,
 }
 
+impl core::fmt::Debug for Status {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let chip_mode = self.chip_mode();
+        let command_status = self.command_status();
+        write!(f, "{{inner: {:#08b}, chip_mode: {:?}, command_status: {:?}}}", self.inner, chip_mode, command_status)
+    }
+}
+
 #[repr(u8)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum ChipMode {
     StbyRC = 0x02,
     StbyXOSC = 0x03,
@@ -14,7 +22,7 @@ pub enum ChipMode {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum CommandStatus {
     DataAvaiable = 0x02,
     CommandTimeout = 0x03,

@@ -54,7 +54,7 @@ fn main() -> ! {
     };
     let spi1_freq = 100.khz();
 
-    let mut spi1 = Spi::spi1(
+    let spi1 = &mut Spi::spi1(
         peripherals.SPI1,
         (spi1_sck, spi1_miso, spi1_mosi),
         &mut afio.mapr,
@@ -79,15 +79,15 @@ fn main() -> ! {
         .into_push_pull_output_with_state(&mut gpioa.crh, High);
 
     let lora_pins = (
-        lora_nss,
-        lora_nreset,
-        lora_busy,
-        lora_ant,
-        lora_dio1,
-        lora_dio2,
+        lora_nss,    // D7
+        lora_nreset, // A0
+        lora_busy,   // D4
+        lora_ant,    // D8
+        lora_dio1,   // D6
+        lora_dio2,   // NC
     );
 
-    let mut delay = Delay::new(core_peripherals.SYST, clocks);
+    let delay = &mut Delay::new(core_peripherals.SYST, clocks);
 
     // // Init LoRa modem
     let packet_params = LoRaPacketParams::default()
@@ -112,19 +112,23 @@ fn main() -> ! {
         rf_freq: 868_000_000, // 868MHz (EU)
     };
 
-    let mut lora = SX126x::init(&mut spi1, &mut delay, lora_pins, conf).unwrap();
+    let mut lora = SX126x::init(spi1, delay, lora_pins, conf).unwrap();
 
-    // Send LoRa message
-    let timeout = sx126x::op::tx::TxTimeout::from_us(0); // timeout disabled
+    
+    let timeout = sx126x::op::tx::TxTimeout::from_us(0x000000); // timeout disabled
 
     // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpiob.pb0.into_push_pull_output(&mut gpiob.crl);
     loop {
         led_pin.set_high().unwrap();
-        delay.delay_ms(500u16);
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500u16);
-        lora.write_bytes(&mut spi1, &mut delay, b"Hello, LoRa World!", timeout)
+        // Send LoRa message
+        
+        lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout)
             .unwrap();
+        led_pin.set_low().unwrap();
+        let status = lora.get_status(spi1, delay).unwrap();
+        let errors = lora.get_device_errors(spi1, delay).unwrap();
+        cortex_m_semihosting::hprintln!("{:?}\n{:?}", status, errors).unwrap();
+        delay.delay_ms(1000u16);
     }
 }
