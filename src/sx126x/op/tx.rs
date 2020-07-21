@@ -18,6 +18,15 @@ impl TxTimeout {
     }
 }
 
+impl From<u32> for TxTimeout {
+    fn from(val: u32) -> Self {
+        let bytes = val.to_be_bytes();
+        Self {
+            inner: [bytes[0], bytes[1], bytes[2]],
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum RampTime {
@@ -75,6 +84,52 @@ impl TxParams {
     /// Set power ramp time
     pub fn set_ramp_time(mut self, ramp_time: RampTime) -> Self {
         self.ramp_time = ramp_time;
+        self
+    }
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone)]
+pub enum DeviceSel {
+    SX1262 = 0x00,
+    SX1261 = 0x01,
+}
+
+pub struct PaConfig {
+    pa_duty_cycle: u8,
+    hp_max: u8,
+    device_sel: DeviceSel,
+}
+
+impl Into<[u8; 4]> for PaConfig {
+    fn into(self) -> [u8; 4] {
+        [self.pa_duty_cycle, self.hp_max, self.device_sel as u8, 0x01]
+    }
+}
+
+impl Default for PaConfig {
+    fn default() -> Self {
+        Self {
+            pa_duty_cycle: 0x00,
+            hp_max: 0x00,
+            device_sel: DeviceSel::SX1262,
+        }
+    }
+}
+
+impl PaConfig {
+    pub fn set_pa_duty_cycle(mut self, pa_duty_cycle: u8) -> Self {
+        self.pa_duty_cycle = pa_duty_cycle;
+        self
+    }
+
+    pub fn set_hp_max(mut self, hp_max: u8) -> Self {
+        self.hp_max = hp_max;
+        self
+    }
+
+    pub fn set_device_sel(mut self, device_sel: DeviceSel) -> Self {
+        self.device_sel = device_sel;
         self
     }
 }

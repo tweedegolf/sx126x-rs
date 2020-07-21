@@ -25,7 +25,7 @@ features = ["stm32f103", "rt", "medium"]
 optional = true
 
 [features]
-default = ["sx126x", "f1", "tcxo"]
+default = ["sx126x", "f1"]
 sx126x = []
 sx127x = []
 f3 = ["stm32f3xx-hal"]

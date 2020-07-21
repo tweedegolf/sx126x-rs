@@ -69,26 +69,55 @@ where
         let _ = sx.wakeup(spi, delay);
 
         // Go to standby mode
-        sx.set_standby(spi, delay, conf.standby_config)?;
+        // sx.set_standby(spi, delay, conf.standby_config)?;
 
-        // Configure pins
+        // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
+        sx.set_standby(spi, delay, conf.standby_config)?;
+        // 2. Define the protocol (LoRa® or FSK) with the command SetPacketType(...)
+        sx.set_packet_type(spi, delay, conf.packet_type)?;
+        // 3. Define the RF frequency with the command SetRfFrequency(...)
+        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
+        // 4. Define the Power Amplifier configuration with the command SetPaConfig(...)
+        sx.set_pa_config(spi, delay, conf.pa_config)?;
+        // 5. Define output power and ramping time with the command SetTxParams(...)
+        sx.set_tx_params(spi, delay, conf.tx_params)?;
+        // 6. Define where the data payload will be stored with the command SetBufferBaseAddress(...)
+        sx.set_buffer_base_address(spi, delay, 0x00, 0x00)?;
+        // 7. Send the payload to the data buffer with the command WriteBuffer(...)
+        //sx.write_buffer(spi, delay, 0x00, b"Hello, LoRa World!")?;
+        // 8. Define the modulation parameter according to the chosen protocol with the command SetModulationParams(...) 1
+        sx.set_mod_params(spi, delay, conf.mod_params)?;
+        // 9. Define the frame format to be used with the command SetPacketParams(...) 2
+        sx.set_packet_params(spi, delay, conf.packet_params)?;
+        // 10. Configure DIO and IRQ: use the command SetDioIrqParams(...) to select TxDone IRQ and map this IRQ to a DIO (DIO1,
+        // DIO2 or DIO3)
+        sx.set_dio_irq_params(
+            spi,
+            delay,
+            conf.dio1_irq_mask,
+            conf.dio1_irq_mask,
+            IrqMask::none(),
+            IrqMask::none(),
+        )?;
+        sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
         #[cfg(feature = "tcxo")]
         {
             sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
             sx.calibrate(spi, delay, conf.calib_param)?;
         }
-        sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
-        let _ = sx.set_ant_enabled(true);
 
-        // Configure communication parameters
-        sx.set_packet_type(spi, delay, conf.packet_type)?;
-        sx.set_sync_word(spi, delay, conf.sync_word)?;
-        sx.set_packet_params(spi, delay, conf.packet_params)?;
-        sx.set_mod_params(spi, delay, conf.mod_params)?;
-        sx.set_tx_params(spi, delay, conf.tx_params)?;
         sx.calibrate_image(spi, delay, CalibImageFreq::from_rf_freq(conf.rf_freq))?;
-        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
+        // 11. Define Sync Word value: use the command WriteReg(...) to write the value of the register via direct register access
+        sx.set_sync_word(spi, delay, conf.sync_word)?;
+        // 12. Set the circuit in transmitter mode to start transmission with the command SetTx(). Use the parameter to enable
+        // let _ = sx.set_tx(spi, delay, TxTimeout::from_us(1000000));
+        // Timeout
 
+        // 13. Wait for the IRQ TxDone or Timeout: once the packet has been sent the chip goes automatically to STDBY_RC mode
+        // sx.wait_on_busy(delay);
+        // sx.wait_on_dio1();
+        // 14. Clear the IRQ TxDone flag
+        // sx.clear_irq_status(spi, delay, IrqMask::all());
         Ok(sx)
     }
 
@@ -173,7 +202,6 @@ where
             .write(&[0x0D])
             .and_then(|_| spi.write(&start_addr))
             .and_then(|_| spi.write(data));
-
         r
     }
 
@@ -297,15 +325,42 @@ where
             .and_then(|_| spi.write(&(Into::<u16>::into(dio3_mask)).to_be_bytes()))
     }
 
+    pub fn get_irq_status<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<IrqStatus, SpiTransferError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        spi.write(&[0x12]);
+        let mut status = [NOP, NOP];
+        spi.transfer(&mut status)?;
+        Ok(u16::from_be_bytes(status).into())
+    }
+
+    pub fn clear_irq_status<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        mask: IrqMask,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        let mask: u16 = mask.into();
+        spi.write(&[0x02])
+            .and_then(|_| spi.write(&mask.to_be_bytes()))
+    }
+
     pub fn set_tx<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         timeout: TxTimeout,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<Status, SpiTransferError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
-        let timeout: [u8; 3] = timeout.into();
-        spi.write(&[0x83]).and_then(|_| spi.write(&timeout))
+        let mut timeout: [u8; 3] = timeout.into();
+
+        let _ = spi.write(&[0x83]);
+        spi.transfer(&mut timeout)?;
+        Ok(timeout[0].into())
     }
 
     pub fn set_packet_params<'spi>(
@@ -366,27 +421,60 @@ where
         spi.write(&[0x86]).and_then(|_| spi.write(&freq))
     }
 
+    pub fn set_pa_config<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        pa_config: PaConfig,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        let pa_config: [u8; 4] = pa_config.into();
+        spi.write(&[0x95]).and_then(|_| spi.write(&pa_config))
+    }
+
+    pub fn set_buffer_base_address<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        tx_base_addr: u8,
+        rx_base_addr: u8,
+    ) -> Result<(), SpiWriteError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        spi.write(&[0x8F, tx_base_addr, rx_base_addr])
+    }
+
     pub fn write_bytes<'spi, 'data>(
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         data: &'data [u8],
         timeout: TxTimeout,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<Status, SpiTransferError<TSPI>> {
+        
         // Write data to buffer
-        self.write_buffer(spi, delay, 0x00, data)?;
+        self.write_buffer(spi, delay, 0x00, data);
         // Set tx mode
-        self.set_tx(spi, delay, timeout)?;
+        let status = self.set_tx(spi, delay, timeout)?;
         // Wait for busy line to go low
         self.wait_on_busy(delay);
+        // Wait on dio1 going high
+        self.wait_on_dio1();
+        // Clear IRQ
+        self.clear_irq_status(spi, delay, IrqMask::all());
         // Write completed!
-        Ok(())
+        Ok(status)
     }
 
     fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns
         delay.delay_us(1);
         while self.busy_pin.is_high().unwrap() {
+            cortex_m::asm::nop();
+        }
+    }
+
+    fn wait_on_dio1(&mut self) {
+        while self.dio1_pin.is_low().unwrap() {
             cortex_m::asm::nop();
         }
     }

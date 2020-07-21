@@ -2,7 +2,7 @@
 #[derive(Copy, Clone)]
 pub enum PacketType {
     GFSK = 0x00,
-    LORA = 0x01,
+    LoRa = 0x01,
 }
 
 pub struct PacketParams {
