@@ -1,4 +1,3 @@
-
 use super::OutputPinError;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;

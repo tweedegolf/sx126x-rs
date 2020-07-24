@@ -34,6 +34,10 @@ impl CalibParam {
             | (image_en as u8) << 6;
         Self { inner }
     }
+
+    pub const fn all() -> Self {
+        Self::new(true, true, true, true, true, true, true)
+    }
 }
 
 #[derive(Copy, Clone)]

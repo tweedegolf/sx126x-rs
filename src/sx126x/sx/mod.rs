@@ -20,18 +20,17 @@ type SpiTransferError<TSPI> = <TSPI as Transfer<u8>>::Error;
 
 const NOP: u8 = 0x00;
 
-pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1, TDIO2> {
+pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     spi: PhantomData<TSPI>,
     slave_select: SlaveSelect<TNSS>,
     nrst_pin: TNRST,
     busy_pin: TBUSY,
     ant_pin: TANT,
     dio1_pin: TDIO1,
-    dio2_pin: TDIO2,
 }
 
-impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1, TDIO2>
-    SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1, TDIO2>
+impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
+    SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
 where
     TSPI: Write<u8> + Transfer<u8>,
     TNSS: OutputPin<Error = Infallible>,
@@ -39,15 +38,14 @@ where
     TBUSY: InputPin<Error = Infallible>,
     TANT: OutputPin<Error = Infallible>,
     TDIO1: InputPin<Error = Infallible>,
-    TDIO2: InputPin<Error = Infallible>,
 {
     pub fn init(
         spi: &mut TSPI,
         delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
-        pins: (TNSS, TNRST, TBUSY, TANT, TDIO1, TDIO2),
+        pins: (TNSS, TNRST, TBUSY, TANT, TDIO1),
         conf: Config,
     ) -> Result<Self, SpiWriteError<TSPI>> {
-        let (mut nss_pin, mut nrst_pin, busy_pin, ant_pin, dio1_pin, dio2_pin) = pins;
+        let (mut nss_pin, mut nrst_pin, busy_pin, ant_pin, dio1_pin) = pins;
         nrst_pin.set_high().unwrap();
         nss_pin.set_high().unwrap();
 
@@ -58,7 +56,6 @@ where
             busy_pin,
             ant_pin,
             dio1_pin,
-            dio2_pin,
         };
 
         // Reset the sx
@@ -67,9 +64,6 @@ where
         //Wakeup
         // TODO: return on error
         let _ = sx.wakeup(spi, delay);
-
-        // Go to standby mode
-        // sx.set_standby(spi, delay, conf.standby_config)?;
 
         // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
         sx.set_standby(spi, delay, conf.standby_config)?;
@@ -121,6 +115,9 @@ where
         Ok(sx)
     }
 
+    /// Set the LoRa Sync word
+    /// Use 0x3444 for public networks like TTN
+    /// Use 0x1424 for private networks
     pub fn set_sync_word(
         &mut self,
         spi: &mut TSPI,
@@ -134,6 +131,9 @@ where
             &sync_word.to_be_bytes(),
         )
     }
+
+    /// Set the modem packet type, which can be either GFSK of LoRa
+    /// Note: GFSK is not fully supported by this crate at the moment
     pub fn set_packet_type<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -144,6 +144,7 @@ where
         spi.write(&[0x8A, packet_type as u8])
     }
 
+    /// Put the modem in standby mode
     pub fn set_standby<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -154,6 +155,7 @@ where
         spi.write(&[0x80, standby_config as u8])
     }
 
+    /// Get the current status of the modem
     pub fn get_status<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -167,6 +169,7 @@ where
         Ok(result[0].into())
     }
 
+    /// Calibrate image
     pub fn calibrate_image<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -178,6 +181,7 @@ where
         spi.write(&[0x98]).and_then(|_| spi.write(&freq))
     }
 
+    /// Calibrate modem
     pub fn calibrate<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -188,6 +192,7 @@ where
         spi.write(&[0x89, calib_param.into()])
     }
 
+    /// Write data into a register
     pub fn write_register<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -205,6 +210,7 @@ where
         r
     }
 
+    /// Read data from a register
     pub fn read_register<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -222,6 +228,7 @@ where
         Ok(())
     }
 
+    /// Write data into the buffer at the defined offset
     pub fn write_buffer<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -233,6 +240,7 @@ where
         spi.write(&[0x0E, offset]).and_then(|_| spi.write(data))
     }
 
+    /// Read data from the data from the defined offset
     pub fn read_buffer<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -247,6 +255,7 @@ where
             .map(|_| {})
     }
 
+    /// Configure the dio2 pin as RF control switch
     pub fn set_dio2_as_rf_switch_ctrl<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -257,6 +266,7 @@ where
         spi.write(&[0x9D, enable as u8])
     }
 
+    /// Configure the dio3 pin as TCXO control switch
     pub fn set_dio3_as_tcxo_ctrl<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -270,6 +280,7 @@ where
             .and_then(|_| spi.write(&tcxo_delay))
     }
 
+    /// Clear device error register
     pub fn clear_device_errors<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -279,6 +290,7 @@ where
         spi.write(&[0x07, 0x00, 0x00])
     }
 
+    /// Get current device errors
     pub fn get_device_errors<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -291,6 +303,7 @@ where
         Ok(DeviceErrors::from(u16::from_le_bytes(result)))
     }
 
+    /// Reset the device py pulling nrst low for a while
     pub fn reset(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), OutputPinError<TNRST>> {
         cortex_m::interrupt::free(|_| {
             self.nrst_pin.set_low()?;
@@ -300,6 +313,7 @@ where
         })
     }
 
+    /// Enable antenna
     pub fn set_ant_enabled(&mut self, enabled: bool) -> Result<(), OutputPinError<TANT>> {
         if enabled {
             self.ant_pin.set_high()
@@ -308,6 +322,7 @@ where
         }
     }
 
+    /// Configure IRQ
     pub fn set_dio_irq_params<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -325,6 +340,7 @@ where
             .and_then(|_| spi.write(&(Into::<u16>::into(dio3_mask)).to_be_bytes()))
     }
 
+    /// Get the current IRQ status
     pub fn get_irq_status<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -337,6 +353,7 @@ where
         Ok(u16::from_be_bytes(status).into())
     }
 
+    /// Clear the IRQ status
     pub fn clear_irq_status<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -349,6 +366,8 @@ where
             .and_then(|_| spi.write(&mask.to_be_bytes()))
     }
 
+    /// Put the device in TX mode. It will start sending the data written in the buffer,
+    /// starting at the configured offset
     pub fn set_tx<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -363,6 +382,7 @@ where
         Ok(timeout[0].into())
     }
 
+    /// Set packet parameters
     pub fn set_packet_params<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -374,6 +394,7 @@ where
         spi.write(&[0x8C]).and_then(|_| spi.write(&params))
     }
 
+    /// Set modulation parameters
     pub fn set_mod_params<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -385,6 +406,7 @@ where
         spi.write(&[0x8B]).and_then(|_| spi.write(&params))
     }
 
+    /// Set TX parameters
     pub fn set_tx_params<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -396,6 +418,7 @@ where
         spi.write(&[0x8E]).and_then(|_| spi.write(&params))
     }
 
+    /// Set RF frequency
     /// 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25
     /// -> RFfrequecy ~ ((RFfreq >> 12) * (Fxtal >> 12)) >> 1
     pub fn set_rf_frequency<'spi>(
@@ -421,6 +444,7 @@ where
         spi.write(&[0x86]).and_then(|_| spi.write(&freq))
     }
 
+    /// Set Power Amplifier configuration
     pub fn set_pa_config<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -432,6 +456,7 @@ where
         spi.write(&[0x95]).and_then(|_| spi.write(&pa_config))
     }
 
+    /// Configure the base addresses in the buffer
     pub fn set_buffer_base_address<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -443,6 +468,9 @@ where
         spi.write(&[0x8F, tx_base_addr, rx_base_addr])
     }
 
+    /// Send a message. This methods writes the data in the buffer,
+    /// puts the device in TX mode, and waits until the devices
+    /// is done sending the data or a timeout occurs
     pub fn write_bytes<'spi, 'data>(
         &mut self,
         spi: &'spi mut TSPI,
@@ -465,6 +493,7 @@ where
         Ok(status)
     }
 
+    /// Busily wait for the busy pin to go low
     fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns
         delay.delay_us(1);
@@ -473,12 +502,14 @@ where
         }
     }
 
+    /// Busily wait for the dio1 pin to go high
     fn wait_on_dio1(&mut self) {
         while self.dio1_pin.is_low().unwrap() {
             cortex_m::asm::nop();
         }
     }
 
+    /// Wakeup the device and enable the antenna
     fn wakeup<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -487,13 +518,15 @@ where
         cortex_m::interrupt::free(|_| {
             self.get_status(spi, delay)?;
             self.wait_on_busy(delay);
-            // TODO: switch on antenna
             Ok(())
         })?;
         self.set_ant_enabled(true).unwrap();
         Ok(())
     }
 
+    /// Waits until the busy pin goes low, then pulls the nss pin low, 
+    /// and waits for a microsecond before returning a SlaveSelectGuard,
+    /// which can be used to write data
     fn slave_select<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,

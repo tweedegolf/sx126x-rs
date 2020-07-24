@@ -1,5 +1,6 @@
 use super::op::*;
 
+/// Configuration parameters
 pub struct Config {
     pub packet_type: PacketType,
     pub standby_config: StandbyConfig,
