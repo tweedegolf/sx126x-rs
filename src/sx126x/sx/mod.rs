@@ -29,8 +29,7 @@ pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     dio1_pin: TDIO1,
 }
 
-impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
-    SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
+impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1> SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
 where
     TSPI: Write<u8> + Transfer<u8>,
     TNSS: OutputPin<Error = Infallible>,
@@ -478,7 +477,6 @@ where
         data: &'data [u8],
         timeout: TxTimeout,
     ) -> Result<Status, SpiTransferError<TSPI>> {
-        
         // Write data to buffer
         self.write_buffer(spi, delay, 0x00, data);
         // Set tx mode
@@ -524,7 +522,7 @@ where
         Ok(())
     }
 
-    /// Waits until the busy pin goes low, then pulls the nss pin low, 
+    /// Waits until the busy pin goes low, then pulls the nss pin low,
     /// and waits for a microsecond before returning a SlaveSelectGuard,
     /// which can be used to write data
     fn slave_select<'spi>(

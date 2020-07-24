@@ -7,7 +7,11 @@ impl core::fmt::Debug for Status {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let chip_mode = self.chip_mode();
         let command_status = self.command_status();
-        write!(f, "Status {{inner: {:#08b}, chip_mode: {:?}, command_status: {:?}}}", self.inner, chip_mode, command_status)
+        write!(
+            f,
+            "Status {{inner: {:#08b}, chip_mode: {:?}, command_status: {:?}}}",
+            self.inner, chip_mode, command_status
+        )
     }
 }
 

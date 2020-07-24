@@ -7,11 +7,11 @@ use sx126x::conf::Config as LoRaConfig;
 use sx126x::SX126x;
 
 use cortex_m_rt::entry;
-use stm32f1xx_hal::prelude::*;
 use embedded_hal::digital::v2::OutputPin;
 use panic_semihosting as _;
 use stm32f1xx_hal::delay::Delay;
 use stm32f1xx_hal::gpio::State::High;
+use stm32f1xx_hal::prelude::*;
 use stm32f1xx_hal::spi::{Mode as SpiMode, Phase, Polarity, Spi};
 use stm32f1xx_hal::stm32;
 
