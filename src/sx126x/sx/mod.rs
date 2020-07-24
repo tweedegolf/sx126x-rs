@@ -503,7 +503,7 @@ where
         let s = self.slave_select.select(spi)?;
         // Table 8-1: Data sheet specifies a minumum delay of 32ns between falling edge of nss and sck setup,
         // though embedded_hal provides no trait for delaying in nanosecond resolution.
-        // delay.delay_us(1);
+        delay.delay_us(1);
         Ok(s)
     }
 }
