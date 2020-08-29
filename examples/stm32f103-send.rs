@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-mod sx126x;
-
 use sx126x::conf::Config as LoRaConfig;
 use sx126x::op::packet::lora::{LoRaCrcType::CrcOn, LoRaPacketParams};
 use sx126x::SX126x;

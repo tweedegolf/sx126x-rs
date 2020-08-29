@@ -108,19 +108,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lorawan-demo"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "cortex-m-semihosting",
- "embedded-hal",
- "nb",
- "panic-semihosting",
- "stm32f1xx-hal",
-]
-
-[[package]]
 name = "nb"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -216,6 +203,19 @@ dependencies = [
  "nb",
  "stm32f1",
  "void",
+]
+
+[[package]]
+name = "sx126x"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "cortex-m-semihosting",
+ "embedded-hal",
+ "nb",
+ "panic-semihosting",
+ "stm32f1xx-hal",
 ]
 
 [[package]]

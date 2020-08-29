@@ -35,9 +35,3 @@ opt-level = 3
 codegen-units = 1 # less threads, better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
 lto = true # better optimizations
-
-# this lets you use `cargo fix`!
-[[bin]]
-name = "lorawan-demo"
-test = false
-bench = false
