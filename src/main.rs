@@ -4,6 +4,7 @@
 mod sx126x;
 
 use sx126x::conf::Config as LoRaConfig;
+use sx126x::op::packet::lora::{LoRaCrcType::CrcOn, LoRaPacketParams};
 use sx126x::SX126x;
 
 use cortex_m_rt::entry;
@@ -14,6 +15,9 @@ use stm32f1xx_hal::gpio::State::High;
 use stm32f1xx_hal::prelude::*;
 use stm32f1xx_hal::spi::{Mode as SpiMode, Phase, Polarity, Spi};
 use stm32f1xx_hal::stm32;
+
+const RF_FREQUENCY: u32 = 868_000_000; // 868MHz (EU)
+const F_XTAL: u32 = 32_000_000;
 
 #[entry]
 fn main() -> ! {
@@ -78,9 +82,10 @@ fn main() -> ! {
 
     let delay = &mut Delay::new(core_peripherals.SYST, clocks);
 
-    // // Init LoRa modem
+    // Init LoRa modem
     let conf = build_config();
-    let mut lora = SX126x::init(spi1, delay, lora_pins, conf).unwrap();
+    let mut lora = SX126x::new(lora_pins);
+    lora.init(spi1, delay, conf).unwrap();
 
     let timeout = sx126x::op::tx::TxTimeout::from(0x000000); // timeout disabled
 
@@ -90,10 +95,9 @@ fn main() -> ! {
         led_pin.set_high().unwrap();
         // Send LoRa message
 
-        let last_status = lora
-            .write_bytes(spi1, delay, b"Hello, LoRa World!", timeout)
+        lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout, 8, CrcOn)
             .unwrap();
-        cortex_m_semihosting::hprintln!("{:?}", last_status).unwrap();
+
         led_pin.set_low().unwrap();
 
         delay.delay_ms(1000u16);
@@ -105,22 +109,14 @@ fn build_config() -> LoRaConfig {
         calib::CalibParam,
         irq::{IrqMask, IrqMaskBit::Timeout, IrqMaskBit::TxDone},
         modulation::lora::LoraModParams,
-        packet::lora::LoRaPacketParams,
         tx::{DeviceSel::SX1261, PaConfig, RampTime, TxParams},
         PacketType::LoRa,
         StandbyConfig::StbyRc,
     };
 
-    #[cfg(feature = "tcxo")]
-    use sx126x::op::{TcxoDelay, TcxoVoltage::Volt1_7};
-
-    let packet_params = LoRaPacketParams::default()
-        .set_preamble_len(8)
-        .set_payload_len(32)
-        .into();
     let mod_params = LoraModParams::default().into();
     let tx_params = TxParams::default()
-        .set_power_dbm(13)
+        .set_power_dbm(14)
         .set_ramp_time(RampTime::Ramp200u);
     let pa_config = PaConfig::default()
         .set_device_sel(SX1261)
@@ -128,20 +124,20 @@ fn build_config() -> LoRaConfig {
 
     let dio1_irq_mask = IrqMask::none().combine(TxDone).combine(Timeout);
 
+    let rf_freq = sx126x::calc_rf_freq(RF_FREQUENCY as f32, F_XTAL as f32);
+
     LoRaConfig {
         packet_type: LoRa,
         standby_config: StbyRc,
         sync_word: 0x1424, // Private networks
-        #[cfg(feature = "tcxo")]
-        tcxo_delay: TcxoDelay::from_us(5000),
-        #[cfg(feature = "tcxo")]
-        tcxo_voltage: Volt1_7,
         calib_param: CalibParam::from(0x7F & 0b1111_1111),
-        packet_params,
         mod_params,
         tx_params,
         pa_config,
         dio1_irq_mask,
-        rf_freq: 868_000_000, // 868MHz (EU)
+        dio2_irq_mask: IrqMask::none(),
+        dio3_irq_mask: IrqMask::none(),
+        rf_frequency: RF_FREQUENCY,
+        rf_freq,
     }
 }

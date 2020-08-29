@@ -57,8 +57,8 @@ impl Into<[u8; 2]> for CalibImageFreq {
 }
 
 impl CalibImageFreq {
-    pub const fn from_rf_freq(rf_freq: u32) -> Self {
-        match rf_freq / 1000000 {
+    pub const fn from_rf_frequency(rf_frequency: u32) -> Self {
+        match rf_frequency / 1000000 {
             902..=928 => Self::MHz902_928,
             863..=870 => Self::MHz863_870,
             779..=787 => Self::MHz779_787,

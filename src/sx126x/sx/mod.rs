@@ -18,7 +18,20 @@ type OutputPinError<TPIN> = <TPIN as OutputPin>::Error;
 type SpiWriteError<TSPI> = <TSPI as Write<u8>>::Error;
 type SpiTransferError<TSPI> = <TSPI as Transfer<u8>>::Error;
 
+type Pins<TNSS, TNRST, TBUSY, TANT, TDIO1> = (TNSS, TNRST, TBUSY, TANT, TDIO1);
+
 const NOP: u8 = 0x00;
+
+/// Calculates the rf_freq value that should be passed to SX126x::set_rf_frequency
+/// based on the desired RF frequency and the XTAL frequency.
+///
+/// Example calculation for 868MHz:
+/// 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25 = 868M
+/// -> RFfreq =
+/// -> RFfrequecy ~ ((RFfreq >> 12) * (Fxtal >> 12)) >> 1
+pub fn calc_rf_freq(rf_frequency: f32, f_xtal: f32) -> u32 {
+    (rf_frequency * (33554432. / f_xtal)) as u32
+}
 
 pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     spi: PhantomData<TSPI>,
@@ -38,80 +51,81 @@ where
     TANT: OutputPin<Error = Infallible>,
     TDIO1: InputPin<Error = Infallible>,
 {
-    pub fn init(
-        spi: &mut TSPI,
-        delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
-        pins: (TNSS, TNRST, TBUSY, TANT, TDIO1),
-        conf: Config,
-    ) -> Result<Self, SpiWriteError<TSPI>> {
-        let (mut nss_pin, mut nrst_pin, busy_pin, ant_pin, dio1_pin) = pins;
-        nrst_pin.set_high().unwrap();
-        nss_pin.set_high().unwrap();
-
-        let mut sx = Self {
+    pub fn new(pins: Pins<TNSS, TNRST, TBUSY, TANT, TDIO1>) -> Self {
+        let (nss_pin, nrst_pin, busy_pin, ant_pin, dio1_pin) = pins;
+        Self {
             spi: PhantomData,
             slave_select: SlaveSelect::new(nss_pin),
             nrst_pin,
             busy_pin,
             ant_pin,
             dio1_pin,
-        };
+        }
+    }
 
+    pub fn init(
+        &mut self,
+        spi: &mut TSPI,
+        delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
+
+        conf: Config,
+    ) -> Result<(), SpiWriteError<TSPI>> {
         // Reset the sx
-        sx.reset(delay).unwrap();
-
-        //Wakeup
-        // TODO: return on error
-        let _ = sx.wakeup(spi, delay);
+        self.reset(delay).unwrap();
 
         // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
-        sx.set_standby(spi, delay, conf.standby_config)?;
+        self.set_standby(spi, delay, conf.standby_config)?;
+
         // 2. Define the protocol (LoRa® or FSK) with the command SetPacketType(...)
-        sx.set_packet_type(spi, delay, conf.packet_type)?;
+        self.set_packet_type(spi, delay, conf.packet_type)?;
+
         // 3. Define the RF frequency with the command SetRfFrequency(...)
-        sx.set_rf_frequency(spi, delay, conf.rf_freq)?;
+        self.set_rf_frequency(spi, delay, conf.rf_freq)?;
+
+        // Calibrate
+        self.calibrate(spi, delay, conf.calib_param)?;
+        self.calibrate_image(
+            spi,
+            delay,
+            CalibImageFreq::from_rf_frequency(conf.rf_frequency),
+        )?;
+
         // 4. Define the Power Amplifier configuration with the command SetPaConfig(...)
-        sx.set_pa_config(spi, delay, conf.pa_config)?;
+        self.set_pa_config(spi, delay, conf.pa_config)?;
+
         // 5. Define output power and ramping time with the command SetTxParams(...)
-        sx.set_tx_params(spi, delay, conf.tx_params)?;
+        self.set_tx_params(spi, delay, conf.tx_params)?;
+
         // 6. Define where the data payload will be stored with the command SetBufferBaseAddress(...)
-        sx.set_buffer_base_address(spi, delay, 0x00, 0x00)?;
+        self.set_buffer_base_address(spi, delay, 0x00, 0x00)?;
+
         // 7. Send the payload to the data buffer with the command WriteBuffer(...)
-        //sx.write_buffer(spi, delay, 0x00, b"Hello, LoRa World!")?;
+        // This is done later un SX126x::write_bytes
+
         // 8. Define the modulation parameter according to the chosen protocol with the command SetModulationParams(...) 1
-        sx.set_mod_params(spi, delay, conf.mod_params)?;
+        self.set_mod_params(spi, delay, conf.mod_params)?;
+
         // 9. Define the frame format to be used with the command SetPacketParams(...) 2
-        sx.set_packet_params(spi, delay, conf.packet_params)?;
+        // This is done later un SX126x::write_bytes
+
         // 10. Configure DIO and IRQ: use the command SetDioIrqParams(...) to select TxDone IRQ and map this IRQ to a DIO (DIO1,
         // DIO2 or DIO3)
-        sx.set_dio_irq_params(
+        self.set_dio_irq_params(
             spi,
             delay,
             conf.dio1_irq_mask,
             conf.dio1_irq_mask,
-            IrqMask::none(),
-            IrqMask::none(),
+            conf.dio2_irq_mask,
+            conf.dio3_irq_mask,
         )?;
-        sx.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
-        #[cfg(feature = "tcxo")]
-        {
-            sx.set_dio3_as_tcxo_ctrl(spi, delay, conf.tcxo_voltage, conf.tcxo_delay)?;
-            sx.calibrate(spi, delay, conf.calib_param)?;
-        }
+        self.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
 
-        sx.calibrate_image(spi, delay, CalibImageFreq::from_rf_freq(conf.rf_freq))?;
         // 11. Define Sync Word value: use the command WriteReg(...) to write the value of the register via direct register access
-        sx.set_sync_word(spi, delay, conf.sync_word)?;
-        // 12. Set the circuit in transmitter mode to start transmission with the command SetTx(). Use the parameter to enable
-        // let _ = sx.set_tx(spi, delay, TxTimeout::from_us(1000000));
-        // Timeout
+        self.set_sync_word(spi, delay, conf.sync_word)?;
 
-        // 13. Wait for the IRQ TxDone or Timeout: once the packet has been sent the chip goes automatically to STDBY_RC mode
-        // sx.wait_on_busy(delay);
-        // sx.wait_on_dio1();
-        // 14. Clear the IRQ TxDone flag
-        // sx.clear_irq_status(spi, delay, IrqMask::all());
-        Ok(sx)
+        // The rest of the steps are done in Self::write_bytes
+
+        Ok(())
     }
 
     /// Set the LoRa Sync word
@@ -286,7 +300,7 @@ where
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), SpiWriteError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x07, 0x00, 0x00])
+        spi.write(&[0x07, NOP, NOP])
     }
 
     /// Get current device errors
@@ -417,30 +431,18 @@ where
         spi.write(&[0x8E]).and_then(|_| spi.write(&params))
     }
 
-    /// Set RF frequency
-    /// 13.4.1.: RFfrequecy = (RFfreq * Fxtal) / 2^25
-    /// -> RFfrequecy ~ ((RFfreq >> 12) * (Fxtal >> 12)) >> 1
+    /// Set RF frequency. This writes the passed rf_freq directly to the modem.
+    /// Use sx1262::calc_rf_freq to calulate the correct value based
+    /// On the XTAL frequency and the desired RF frequency
     pub fn set_rf_frequency<'spi>(
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         rf_freq: u32,
     ) -> Result<(), SpiWriteError<TSPI>> {
-        // TODO: support other XTAL frequencies
-        const XTAL_FREQ_HZ: u32 = 32_000_000; // 32 MHz
-                                              // Shifting right by 12 avoids an overflow for all supported frequencies
-        const XTAL_FREQ_SHIFT: u8 = 12;
-        const XTAL_FREQ_SHIFTED: u32 = XTAL_FREQ_HZ >> XTAL_FREQ_SHIFT;
-        const DIVISOR_FREQ_SHIFT: u8 = 25 - (2 * XTAL_FREQ_SHIFT);
-
         let mut spi = self.slave_select(spi, delay).unwrap();
-
-        let x = rf_freq >> XTAL_FREQ_SHIFT;
-        let y = x * XTAL_FREQ_SHIFTED;
-        let z = y >> DIVISOR_FREQ_SHIFT;
-
-        let freq = z.to_be_bytes();
-        spi.write(&[0x86]).and_then(|_| spi.write(&freq))
+        spi.write(&[0x86])
+            .and_then(|_| spi.write(&rf_freq.to_be_bytes()))
     }
 
     /// Set Power Amplifier configuration
@@ -476,9 +478,22 @@ where
         delay: &mut impl DelayUs<u32>,
         data: &'data [u8],
         timeout: TxTimeout,
+        preamble_len: u16,
+        crc_type: packet::lora::LoRaCrcType,
     ) -> Result<Status, SpiTransferError<TSPI>> {
+        use packet::lora::LoRaPacketParams;
         // Write data to buffer
         self.write_buffer(spi, delay, 0x00, data);
+
+        // Set packet params
+        let params = LoRaPacketParams::default()
+            .set_preamble_len(preamble_len)
+            .set_payload_len(data.len() as u8)
+            .set_crc_type(crc_type)
+            .into();
+
+        self.set_packet_params(spi, delay, params);
+
         // Set tx mode
         let status = self.set_tx(spi, delay, timeout)?;
         // Wait for busy line to go low
