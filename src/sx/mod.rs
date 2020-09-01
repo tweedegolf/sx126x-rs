@@ -31,6 +31,7 @@ pub fn calc_rf_freq(rf_frequency: f32, f_xtal: f32) -> u32 {
     (rf_frequency * (33554432. / f_xtal)) as u32
 }
 
+/// Wrapper around a Semtech SX1261/62 LoRa modem
 pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     spi: PhantomData<TSPI>,
     slave_select: SlaveSelect<TNSS>,
@@ -52,6 +53,7 @@ where
     TANT: OutputPin<Error = Infallible>,
     TDIO1: InputPin<Error = Infallible>,
 {
+    // Create a new SX126x
     pub fn new(pins: Pins<TNSS, TNRST, TBUSY, TANT, TDIO1>) -> Self {
         let (nss_pin, nrst_pin, busy_pin, ant_pin, dio1_pin) = pins;
         Self {
@@ -64,18 +66,18 @@ where
         }
     }
 
+    // Initialize and configure the SX126x using the provided Config
     pub fn init(
         &mut self,
         spi: &mut TSPI,
         delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
-
         conf: Config,
     ) -> Result<(), SpiError<TSPI>> {
         // Reset the sx
         self.reset(delay).unwrap();
 
         // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
-        self.set_standby(spi, delay, conf.standby_config)?;
+        self.set_standby(spi, delay, crate::op::StandbyConfig::StbyRc)?;
 
         // 2. Define the protocol (LoRa® or FSK) with the command SetPacketType(...)
         self.set_packet_type(spi, delay, conf.packet_type)?;

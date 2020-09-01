@@ -107,12 +107,10 @@ fn main() -> ! {
 
 fn build_config() -> LoRaConfig {
     use sx126x::op::{
-        calib::CalibParam,
-        irq::{IrqMask, IrqMaskBit::Timeout, IrqMaskBit::TxDone},
+        irq::{IrqMaskBit::Timeout, IrqMaskBit::TxDone},
         modulation::lora::LoraModParams,
-        tx::{DeviceSel::SX1261, PaConfig, RampTime, TxParams},
+        tx::{DeviceSel::SX1261},
         PacketType::LoRa,
-        StandbyConfig::StbyRc,
     };
 
     let mod_params = LoraModParams::default().into();
@@ -129,7 +127,6 @@ fn build_config() -> LoRaConfig {
 
     LoRaConfig {
         packet_type: LoRa,
-        standby_config: StbyRc,
         sync_word: 0x1424, // Private networks
         calib_param: CalibParam::from(0x7F & 0b1111_1111),
         mod_params,
