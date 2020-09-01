@@ -2,6 +2,8 @@ use super::OutputPinError;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
 
+use crate::err::SpiError;
+
 pub struct SlaveSelect<TNSS: OutputPin> {
     nss: TNSS,
 }
@@ -41,17 +43,18 @@ impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Drop
 impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Write<u8>
     for SlaveSelectGuard<'nss, 'spi, TNSS, TSPI>
 {
-    type Error = <TSPI as Write<u8>>::Error;
+    type Error = SpiError<<TSPI as Write<u8>>::Error, <TSPI as Transfer<u8>>::Error>;
+
     fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
-        self.spi.write(words)
+        self.spi.write(words).map_err(SpiError::Write)
     }
 }
 
 impl<'nss, 'spi, TNSS: OutputPin, TSPI: Write<u8> + Transfer<u8>> Transfer<u8>
     for SlaveSelectGuard<'nss, 'spi, TNSS, TSPI>
 {
-    type Error = <TSPI as Transfer<u8>>::Error;
+    type Error = SpiError<<TSPI as Write<u8>>::Error, <TSPI as Transfer<u8>>::Error>;
     fn transfer<'w>(&mut self, words: &'w mut [u8]) -> Result<&'w [u8], Self::Error> {
-        self.spi.transfer(words)
+        self.spi.transfer(words).map_err(SpiError::Transfer)
     }
 }

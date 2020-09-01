@@ -1,3 +1,4 @@
+pub(crate) mod err;
 mod slave_select;
 
 use core::convert::Infallible;
@@ -7,18 +8,15 @@ use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
-use super::conf::Config;
-use super::op::*;
-use super::reg::*;
+use crate::conf::Config;
+use crate::op::*;
+use crate::reg::*;
+use err::OutputPinError;
 use slave_select::*;
 
-type InputPinError<TPIN> = <TPIN as InputPin>::Error;
-type OutputPinError<TPIN> = <TPIN as OutputPin>::Error;
-
-type SpiWriteError<TSPI> = <TSPI as Write<u8>>::Error;
-type SpiTransferError<TSPI> = <TSPI as Transfer<u8>>::Error;
-
 type Pins<TNSS, TNRST, TBUSY, TANT, TDIO1> = (TNSS, TNRST, TBUSY, TANT, TDIO1);
+
+pub type SpiError<TSPI> = err::SpiError<<TSPI as Write<u8>>::Error, <TSPI as Transfer<u8>>::Error>;
 
 const NOP: u8 = 0x00;
 
@@ -42,9 +40,12 @@ pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     dio1_pin: TDIO1,
 }
 
-impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1> SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
+impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1, TWERR, TTERR>
+    SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
 where
-    TSPI: Write<u8> + Transfer<u8>,
+    TWERR: core::fmt::Debug,
+    TTERR: core::fmt::Debug,
+    TSPI: Write<u8, Error = TWERR> + Transfer<u8, Error = TTERR>,
     TNSS: OutputPin<Error = Infallible>,
     TNRST: OutputPin<Error = Infallible>,
     TBUSY: InputPin<Error = Infallible>,
@@ -69,7 +70,7 @@ where
         delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
 
         conf: Config,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         // Reset the sx
         self.reset(delay).unwrap();
 
@@ -136,7 +137,7 @@ where
         spi: &mut TSPI,
         delay: &mut impl DelayUs<u32>,
         sync_word: u16,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         self.write_register(
             spi,
             delay,
@@ -152,7 +153,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         packet_type: PacketType,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x8A, packet_type as u8])
     }
@@ -163,7 +164,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         standby_config: StandbyConfig,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x80, standby_config as u8])
     }
@@ -173,7 +174,7 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<Status, SpiTransferError<TSPI>> {
+    ) -> Result<Status, SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mut result = [NOP];
         spi.transfer(&mut [0xC0])
@@ -188,7 +189,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         freq: CalibImageFreq,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let freq: [u8; 2] = freq.into();
         spi.write(&[0x98]).and_then(|_| spi.write(&freq))
@@ -200,7 +201,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         calib_param: CalibParam,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x89, calib_param.into()])
     }
@@ -212,7 +213,7 @@ where
         delay: &mut impl DelayUs<u32>,
         register: Register,
         data: &[u8],
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let start_addr = (register as u16).to_be_bytes();
 
         let mut spi = self.slave_select(spi, delay).unwrap();
@@ -230,7 +231,7 @@ where
         delay: &mut impl DelayUs<u32>,
         start_addr: u16,
         result: &mut [u8],
-    ) -> Result<(), SpiTransferError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         debug_assert!(result.len() >= 1);
         let mut start_addr = start_addr.to_be_bytes();
         let mut spi = self.slave_select(spi, delay).unwrap();
@@ -248,7 +249,7 @@ where
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         data: &[u8],
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x0E, offset]).and_then(|_| spi.write(data))
     }
@@ -260,7 +261,7 @@ where
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         result: &mut [u8],
-    ) -> Result<(), SpiTransferError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mut header = [0x1E, offset, NOP];
         spi.transfer(&mut header)
@@ -274,7 +275,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         enable: bool,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x9D, enable as u8])
     }
@@ -286,7 +287,7 @@ where
         delay: &mut impl DelayUs<u32>,
         tcxo_voltage: TcxoVoltage,
         tcxo_delay: TcxoDelay,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let tcxo_delay: [u8; 3] = tcxo_delay.into();
         spi.write(&[0x97, tcxo_voltage as u8])
@@ -298,7 +299,7 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x07, NOP, NOP])
     }
@@ -308,7 +309,7 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<DeviceErrors, SpiTransferError<TSPI>> {
+    ) -> Result<DeviceErrors, SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mut result = [NOP; 2];
         spi.transfer(&mut [0x17, NOP])
@@ -344,7 +345,7 @@ where
         dio1_mask: IrqMask,
         dio2_mask: IrqMask,
         dio3_mask: IrqMask,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x08])
             .and_then(|_| spi.write(&(Into::<u16>::into(irq_mask)).to_be_bytes()))
@@ -358,9 +359,9 @@ where
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<IrqStatus, SpiTransferError<TSPI>> {
+    ) -> Result<IrqStatus, SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x12]);
+        spi.write(&[0x12])?;
         let mut status = [NOP, NOP];
         spi.transfer(&mut status)?;
         Ok(u16::from_be_bytes(status).into())
@@ -372,7 +373,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         mask: IrqMask,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mask: u16 = mask.into();
         spi.write(&[0x02])
@@ -386,7 +387,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         timeout: TxTimeout,
-    ) -> Result<Status, SpiTransferError<TSPI>> {
+    ) -> Result<Status, SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mut timeout: [u8; 3] = timeout.into();
 
@@ -401,7 +402,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: PacketParams,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let params: [u8; 9] = params.into();
         spi.write(&[0x8C]).and_then(|_| spi.write(&params))
@@ -413,7 +414,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: ModParams,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let params: [u8; 8] = params.into();
         spi.write(&[0x8B]).and_then(|_| spi.write(&params))
@@ -425,7 +426,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: TxParams,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let params: [u8; 2] = params.into();
         spi.write(&[0x8E]).and_then(|_| spi.write(&params))
@@ -439,7 +440,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         rf_freq: u32,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x86])
             .and_then(|_| spi.write(&rf_freq.to_be_bytes()))
@@ -451,7 +452,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         pa_config: PaConfig,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let pa_config: [u8; 4] = pa_config.into();
         spi.write(&[0x95]).and_then(|_| spi.write(&pa_config))
@@ -464,7 +465,7 @@ where
         delay: &mut impl DelayUs<u32>,
         tx_base_addr: u8,
         rx_base_addr: u8,
-    ) -> Result<(), SpiWriteError<TSPI>> {
+    ) -> Result<(), SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         spi.write(&[0x8F, tx_base_addr, rx_base_addr])
     }
@@ -480,10 +481,10 @@ where
         timeout: TxTimeout,
         preamble_len: u16,
         crc_type: packet::lora::LoRaCrcType,
-    ) -> Result<Status, SpiTransferError<TSPI>> {
+    ) -> Result<Status, SpiError<TSPI>> {
         use packet::lora::LoRaPacketParams;
         // Write data to buffer
-        self.write_buffer(spi, delay, 0x00, data);
+        self.write_buffer(spi, delay, 0x00, data)?;
 
         // Set packet params
         let params = LoRaPacketParams::default()
@@ -492,7 +493,7 @@ where
             .set_crc_type(crc_type)
             .into();
 
-        self.set_packet_params(spi, delay, params);
+        self.set_packet_params(spi, delay, params)?;
 
         // Set tx mode
         let status = self.set_tx(spi, delay, timeout)?;
@@ -501,7 +502,7 @@ where
         // Wait on dio1 going high
         self.wait_on_dio1();
         // Clear IRQ
-        self.clear_irq_status(spi, delay, IrqMask::all());
+        self.clear_irq_status(spi, delay, IrqMask::all())?;
         // Write completed!
         Ok(status)
     }
@@ -520,21 +521,6 @@ where
         while self.dio1_pin.is_low().unwrap() {
             cortex_m::asm::nop();
         }
-    }
-
-    /// Wakeup the device and enable the antenna
-    fn wakeup<'spi>(
-        &'spi mut self,
-        spi: &'spi mut TSPI,
-        delay: &mut impl DelayUs<u32>,
-    ) -> Result<(), SpiTransferError<TSPI>> {
-        cortex_m::interrupt::free(|_| {
-            self.get_status(spi, delay)?;
-            self.wait_on_busy(delay);
-            Ok(())
-        })?;
-        self.set_ant_enabled(true).unwrap();
-        Ok(())
     }
 
     /// Waits until the busy pin goes low, then pulls the nss pin low,

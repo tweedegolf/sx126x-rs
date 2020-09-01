@@ -1,6 +1,7 @@
 use super::op::*;
 
-/// Configuration parameters
+/// Configuration parameters.
+/// Used to initialize the SX126x modem
 pub struct Config {
     pub packet_type: PacketType,
     pub standby_config: StandbyConfig,

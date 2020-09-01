@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 #[repr(u16)]
 /// Every register defined in the SX126X datasheet
+/// See table 12-1 in the datasheet
 pub enum Register {
     /// Non-standard DIOx control
     DioxOutputEnable = 0x0580,

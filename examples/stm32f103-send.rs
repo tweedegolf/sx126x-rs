@@ -2,7 +2,7 @@
 #![no_main]
 
 use sx126x::conf::Config as LoRaConfig;
-use sx126x::op::packet::lora::{LoRaCrcType::CrcOn, LoRaPacketParams};
+use sx126x::op::*;
 use sx126x::SX126x;
 
 use cortex_m_rt::entry;
@@ -31,7 +31,7 @@ fn main() -> ! {
     let mut gpioa = peripherals.GPIOA.split(&mut rcc.apb2);
     let mut gpiob = peripherals.GPIOB.split(&mut rcc.apb2);
 
-    // Init SPI1
+    // ===== Init SPI1 =====
     let spi1_sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
     let spi1_miso = gpioa.pa6.into_floating_input(&mut gpioa.crl);
     let spi1_mosi = gpioa.pa7.into_alternate_push_pull(&mut gpioa.crl);
@@ -57,7 +57,7 @@ fn main() -> ! {
         &mut rcc.apb2,
     );
 
-    // Init pins
+    // ===== Init pins =====
     let lora_nreset = gpioa
         .pa0
         .into_push_pull_output_with_state(&mut gpioa.crl, High);
@@ -80,20 +80,23 @@ fn main() -> ! {
 
     let delay = &mut Delay::new(core_peripherals.SYST, clocks);
 
-    // Init LoRa modem
+    // ===== Init LoRa modem =====
     let conf = build_config();
     let mut lora = SX126x::new(lora_pins);
     lora.init(spi1, delay, conf).unwrap();
 
-    let timeout = sx126x::op::tx::TxTimeout::from(0x000000); // timeout disabled
+    let timeout = tx::TxTimeout::from(0x000000); // timeout disabled
+    let crc_type = packet::lora::LoRaCrcType::CrcOn;
 
     // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpioa.pa10.into_push_pull_output(&mut gpioa.crh);
+
+    
     loop {
         led_pin.set_high().unwrap();
         // Send LoRa message
 
-        lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout, 8, CrcOn)
+        lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout, 8, crc_type)
             .unwrap();
 
         led_pin.set_low().unwrap();
