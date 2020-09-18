@@ -1,15 +1,15 @@
 #[derive(Copy, Clone)]
-pub struct TxTimeout {
+pub struct RxTxTimeout {
     inner: [u8; 3],
 }
 
-impl Into<[u8; 3]> for TxTimeout {
+impl Into<[u8; 3]> for RxTxTimeout {
     fn into(self) -> [u8; 3] {
         self.inner
     }
 }
 
-impl TxTimeout {
+impl RxTxTimeout {
     pub const fn from_us(us: u32) -> Self {
         let inner = divide!(us, 15.625);
         let inner = inner.to_le_bytes();
@@ -18,7 +18,7 @@ impl TxTimeout {
     }
 }
 
-impl From<u32> for TxTimeout {
+impl From<u32> for RxTxTimeout {
     fn from(val: u32) -> Self {
         let bytes = val.to_be_bytes();
         Self {

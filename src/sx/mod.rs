@@ -388,12 +388,26 @@ where
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-        timeout: TxTimeout,
+        timeout: RxTxTimeout,
     ) -> Result<Status, SpiError<TSPI>> {
         let mut spi = self.slave_select(spi, delay).unwrap();
         let mut timeout: [u8; 3] = timeout.into();
 
         let _ = spi.write(&[0x83]);
+        spi.transfer(&mut timeout)?;
+        Ok(timeout[0].into())
+    }
+
+    pub fn set_rx<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+        timeout: RxTxTimeout,
+    ) -> Result<Status, SpiError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        let mut timeout: [u8; 3] = timeout.into();
+
+        let _ = spi.write(&[0x82]);
         spi.transfer(&mut timeout)?;
         Ok(timeout[0].into())
     }
@@ -480,7 +494,7 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         data: &'data [u8],
-        timeout: TxTimeout,
+        timeout: RxTxTimeout,
         preamble_len: u16,
         crc_type: packet::lora::LoRaCrcType,
     ) -> Result<Status, SpiError<TSPI>> {

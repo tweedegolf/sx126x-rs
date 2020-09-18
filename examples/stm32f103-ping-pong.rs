@@ -2,20 +2,43 @@
 #![no_main]
 
 use sx126x::conf::Config as LoRaConfig;
+use sx126x::op::status::CommandStatus::DataAvailable;
 use sx126x::op::*;
 use sx126x::SX126x;
+
+use core::mem::MaybeUninit;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::OutputPin;
 use panic_semihosting as _;
 use stm32f1xx_hal::delay::Delay;
-use stm32f1xx_hal::gpio::State::High;
+use stm32f1xx_hal::gpio::*;
 use stm32f1xx_hal::prelude::*;
 use stm32f1xx_hal::spi::{Mode as SpiMode, Phase, Polarity, Spi};
 use stm32f1xx_hal::stm32;
 
+use stm32::interrupt;
+
+type Dio1Pin = gpiob::PB10<Input<Floating>>;
+
 const RF_FREQUENCY: u32 = 868_000_000; // 868MHz (EU)
-const F_XTAL: u32 = 32_000_000;
+const F_XTAL: u32 = 32_000_000; // 32MHz
+
+static mut DIO1_PIN: MaybeUninit<Dio1Pin> = MaybeUninit::uninit();
+static DIO1_RISEN: AtomicBool = AtomicBool::new(true);
+
+#[interrupt]
+fn EXTI15_10() {
+    let int_pin = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
+
+    if int_pin.check_interrupt() {
+        DIO1_RISEN.store(true, Ordering::Relaxed);
+
+        // if we don't clear this bit, the ISR would trigger indefinitely
+        int_pin.clear_interrupt_pending_bit();
+    }
+}
 
 #[entry]
 fn main() -> ! {
@@ -25,6 +48,7 @@ fn main() -> ! {
     let mut rcc = peripherals.RCC.constrain();
     let mut flash = peripherals.FLASH.constrain();
     let mut afio = peripherals.AFIO.constrain(&mut rcc.apb2);
+    let exti = peripherals.EXTI;
 
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
 
@@ -60,15 +84,22 @@ fn main() -> ! {
     // ===== Init pins =====
     let lora_nreset = gpioa
         .pa0
-        .into_push_pull_output_with_state(&mut gpioa.crl, High);
+        .into_push_pull_output_with_state(&mut gpioa.crl, State::High);
     let lora_nss = gpioa
         .pa8
-        .into_push_pull_output_with_state(&mut gpioa.crh, High);
+        .into_push_pull_output_with_state(&mut gpioa.crh, State::High);
     let lora_busy = gpiob.pb5.into_floating_input(&mut gpiob.crl);
-    let lora_dio1 = gpiob.pb10.into_floating_input(&mut gpiob.crh);
     let lora_ant = gpioa
         .pa9
-        .into_push_pull_output_with_state(&mut gpioa.crh, High);
+        .into_push_pull_output_with_state(&mut gpioa.crh, State::High);
+
+    let lora_dio1 = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
+
+    *lora_dio1 = gpiob.pb10.into_floating_input(&mut gpiob.crh);
+    lora_dio1.make_interrupt_source(&mut afio);
+    lora_dio1.trigger_on_edge(&exti, Edge::RISING);
+    lora_dio1.enable_interrupt(&exti);
+    let lora_dio1 = Dio1PinRefMut(lora_dio1);
 
     let lora_pins = (
         lora_nss,    // D7
@@ -85,21 +116,43 @@ fn main() -> ! {
     let mut lora = SX126x::new(lora_pins);
     lora.init(spi1, delay, conf).unwrap();
 
-    let timeout = 0.into(); // timeout disabled
+    let tx_timeout = 0.into(); // TX timeout disabled
+    let rx_timeout = RxTxTimeout::from_us(1_000_000);
     let crc_type = packet::lora::LoRaCrcType::CrcOn;
 
     // Blink LED to indicate the whole program has run to completion
-    let mut led_pin = gpioa.pa10.into_push_pull_output(&mut gpioa.crh);
+    let mut led_pin = gpioa
+        .pa10
+        .into_push_pull_output_with_state(&mut gpioa.crh, State::Low);
 
-    
+    unsafe {
+        stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
+    }
+
+    // Send LoRa message
+    // lora.write_bytes(spi1, delay, b"Pong", timeout, 8, crc_type)
+    // .unwrap();
+
+    //Set the device in receiving mode
+    lora.set_rx(spi1, delay, rx_timeout)
+        .unwrap();
+
     loop {
-        led_pin.set_high().unwrap();
-        // Send LoRa message
+        // led_pin.set_high().unwrap();
 
-        lora.write_bytes(spi1, delay, b"Hello, LoRa World!", timeout, 8, crc_type)
-            .unwrap();
-
-        led_pin.set_low().unwrap();
+        if (DIO1_RISEN.swap(false, Ordering::Relaxed)) {
+            let status = lora.get_status(spi1, delay).unwrap();
+            if let Some(DataAvailable) = status.command_status() {
+                led_pin.set_high();
+                // TODO: fetch received payload
+                // Send LoRa message
+            }
+            lora.write_bytes(spi1, delay, b"Pongpong", tx_timeout, 8, crc_type)
+                .unwrap();
+            lora.set_rx(spi1, delay, rx_timeout)
+                .unwrap();
+            led_pin.set_low();
+        }
 
         delay.delay_ms(1000u16);
     }
@@ -107,9 +160,7 @@ fn main() -> ! {
 
 fn build_config() -> LoRaConfig {
     use sx126x::op::{
-        irq::{IrqMaskBit::Timeout, IrqMaskBit::TxDone},
-        modulation::lora::LoraModParams,
-        rxtx::{DeviceSel::SX1261},
+        irq::IrqMaskBit::*, modulation::lora::LoraModParams, rxtx::DeviceSel::SX1261,
         PacketType::LoRa,
     };
 
@@ -121,7 +172,10 @@ fn build_config() -> LoRaConfig {
         .set_device_sel(SX1261)
         .set_pa_duty_cycle(0x04);
 
-    let dio1_irq_mask = IrqMask::none().combine(TxDone).combine(Timeout);
+    let dio1_irq_mask = IrqMask::none()
+        .combine(TxDone)
+        .combine(Timeout)
+        .combine(RxDone);
 
     let rf_freq = sx126x::calc_rf_freq(RF_FREQUENCY as f32, F_XTAL as f32);
 
@@ -137,5 +191,20 @@ fn build_config() -> LoRaConfig {
         dio3_irq_mask: IrqMask::none(),
         rf_frequency: RF_FREQUENCY,
         rf_freq,
+    }
+}
+
+/// Wraps a mutable reference to a Dio1Pin.
+struct Dio1PinRefMut<'dio1>(&'dio1 mut Dio1Pin);
+
+impl<'dio1> embedded_hal::digital::v2::InputPin for Dio1PinRefMut<'dio1> {
+    type Error = core::convert::Infallible;
+
+    fn is_high(&self) -> Result<bool, Self::Error> {
+        self.0.is_high()
+    }
+
+    fn is_low(&self) -> Result<bool, Self::Error> {
+        self.0.is_low()
     }
 }

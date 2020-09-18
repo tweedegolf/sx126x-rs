@@ -19,7 +19,7 @@ pub mod modulation;
 pub mod packet;
 pub mod status;
 pub mod tcxo;
-pub mod tx;
+pub mod rxtx;
 
 pub use calib::*;
 pub use err::*;
@@ -29,4 +29,4 @@ pub use modulation::*;
 pub use packet::*;
 pub use status::*;
 pub use tcxo::*;
-pub use tx::*;
+pub use rxtx::*;
