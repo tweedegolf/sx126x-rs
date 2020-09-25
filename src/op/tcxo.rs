@@ -23,8 +23,8 @@ impl Into<[u8; 3]> for TcxoDelay {
 }
 
 impl TcxoDelay {
-    pub const fn from_us(us: u32) -> Self {
-        let inner = divide!(us, 15.625);
+    pub const fn from_ms(ms: u32) -> Self {
+        let inner = ms << 6;
         let inner = inner.to_le_bytes();
         let inner = [inner[2], inner[1], inner[0]];
         Self { inner }
