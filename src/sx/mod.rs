@@ -103,13 +103,15 @@ where
         self.set_buffer_base_address(spi, delay, 0x00, 0x00)?;
 
         // 7. Send the payload to the data buffer with the command WriteBuffer(...)
-        // This is done later un SX126x::write_bytes
+        // This is done later in SX126x::write_bytes
 
         // 8. Define the modulation parameter according to the chosen protocol with the command SetModulationParams(...) 1
         self.set_mod_params(spi, delay, conf.mod_params)?;
 
         // 9. Define the frame format to be used with the command SetPacketParams(...) 2
-        // This is done later un SX126x::write_bytes
+        if let Some(packet_params) = conf.packet_params {
+            self.set_packet_params(spi, delay, packet_params)?;
+        }
 
         // 10. Configure DIO and IRQ: use the command SetDioIrqParams(...) to select TxDone IRQ and map this IRQ to a DIO (DIO1,
         // DIO2 or DIO3)

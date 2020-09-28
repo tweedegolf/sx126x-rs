@@ -91,7 +91,6 @@ fn main() -> ! {
     // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpioa.pa10.into_push_pull_output(&mut gpioa.crh);
 
-    
     loop {
         led_pin.set_high().unwrap();
         // Send LoRa message
@@ -109,7 +108,7 @@ fn build_config() -> LoRaConfig {
     use sx126x::op::{
         irq::{IrqMaskBit::Timeout, IrqMaskBit::TxDone},
         modulation::lora::LoraModParams,
-        rxtx::{DeviceSel::SX1261},
+        rxtx::DeviceSel::SX1261,
         PacketType::LoRa,
     };
 
@@ -132,6 +131,9 @@ fn build_config() -> LoRaConfig {
         mod_params,
         tx_params,
         pa_config,
+        // We want to set these just before sending a message,
+        // as it contains the payload length
+        packet_params: None,
         dio1_irq_mask,
         dio2_irq_mask: IrqMask::none(),
         dio3_irq_mask: IrqMask::none(),

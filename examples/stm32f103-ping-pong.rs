@@ -132,14 +132,6 @@ fn main() -> ! {
         .pa10
         .into_push_pull_output_with_state(&mut gpioa.crh, State::Low);
 
-    // Set the packet parameters
-    lora.set_packet_params(
-        spi1,
-        delay,
-        sx126x::op::packet::lora::LoRaPacketParams::default().into(),
-    )
-    .unwrap();
-
     // Unmask the EXTI15_10 ISR in the NVIC register
     unsafe {
         stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
@@ -162,7 +154,7 @@ fn main() -> ! {
                     // Read the received message in chunks of 8 bytes
                     let mut chunk_result = [0u8; 8];
                     for i in (0..payload_len).step_by(8) {
-                        let end = (payload_len - i).min(8) as usize;
+                        let end = (payload_len - i).min(chunk_result.len() as u8) as usize;
                         lora.read_buffer(spi1, delay, i + start_offset, &mut chunk_result[..end])
                             .unwrap();
                         hprint!("{}", unsafe {
@@ -199,7 +191,7 @@ fn main() -> ! {
 fn build_config() -> LoRaConfig {
     use sx126x::op::{
         irq::IrqMaskBit::*, modulation::lora::LoraModParams, rxtx::DeviceSel::SX1261,
-        PacketType::LoRa,
+        packet::lora::LoRaPacketParams, PacketType::LoRa,
     };
 
     let mod_params = LoraModParams::default().into();
@@ -215,6 +207,8 @@ fn build_config() -> LoRaConfig {
         .combine(Timeout)
         .combine(RxDone);
 
+    let packet_params = LoRaPacketParams::default().into();
+
     let rf_freq = sx126x::calc_rf_freq(RF_FREQUENCY as f32, F_XTAL as f32);
 
     LoRaConfig {
@@ -224,6 +218,7 @@ fn build_config() -> LoRaConfig {
         mod_params,
         tx_params,
         pa_config,
+        packet_params: Some(packet_params),
         dio1_irq_mask,
         dio2_irq_mask: IrqMask::none(),
         dio3_irq_mask: IrqMask::none(),
