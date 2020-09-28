@@ -26,17 +26,20 @@ type Dio1Pin = gpiob::PB10<Input<Floating>>;
 const RF_FREQUENCY: u32 = 868_000_000; // 868MHz (EU)
 const F_XTAL: u32 = 32_000_000; // 32MHz
 
+/// Static reference to the DIO1 pin, for use in the ISR EXTi15_10
 static mut DIO1_PIN: MaybeUninit<Dio1Pin> = MaybeUninit::uninit();
-static DIO1_RISEN: AtomicBool = AtomicBool::new(true);
+
+/// Flag which is raised when DIO1 level was risen.
+static DIO1_RISEN: AtomicBool = AtomicBool::new(false);
 #[interrupt]
 fn EXTI15_10() {
-    let int_pin = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
-
-    if int_pin.check_interrupt() {
+    let dio1_pin = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
+    // Check whether the interrupt was caused by the DIO1 pin
+    if dio1_pin.check_interrupt() {
         DIO1_RISEN.store(true, Ordering::Relaxed);
 
         // if we don't clear this bit, the ISR would trigger indefinitely
-        int_pin.clear_interrupt_pending_bit();
+        dio1_pin.clear_interrupt_pending_bit();
     }
 }
 
@@ -95,10 +98,14 @@ fn main() -> ! {
 
     let lora_dio1 = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
 
+    // Configure dio1 pin as interrupt source and store a reference to it in
+    // DIO1_PIN static
     *lora_dio1 = gpiob.pb10.into_floating_input(&mut gpiob.crh);
     lora_dio1.make_interrupt_source(&mut afio);
     lora_dio1.trigger_on_edge(&exti, Edge::RISING);
     lora_dio1.enable_interrupt(&exti);
+    // Wrap DIO1 pin in Dio1PinRefMut newtype, as mutable refences to
+    // pins do not implement the `embedded_hal::digital::v2::InputPin` trait.
     let lora_dio1 = Dio1PinRefMut(lora_dio1);
 
     let lora_pins = (
@@ -109,6 +116,7 @@ fn main() -> ! {
         lora_dio1,   // D6
     );
 
+    // Initialize a busy-waiting delay based on the system clock
     let delay = &mut Delay::new(core_peripherals.SYST, clocks);
 
     // ===== Init LoRa modem =====
@@ -116,7 +124,7 @@ fn main() -> ! {
     let mut lora = SX126x::new(lora_pins);
     lora.init(spi1, delay, conf).unwrap();
 
-    // let tx_timeout = 0.into(); // TX timeout disabled
+    let tx_timeout = 0.into(); // TX timeout disabled
     let rx_timeout = RxTxTimeout::from_ms(3000);
     let crc_type = packet::lora::LoRaCrcType::CrcOn;
 
@@ -124,21 +132,20 @@ fn main() -> ! {
         .pa10
         .into_push_pull_output_with_state(&mut gpioa.crh, State::Low);
 
-    unsafe {
-        stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
-    }
-
+    // Set the packet parameters
     lora.set_packet_params(
         spi1,
         delay,
         sx126x::op::packet::lora::LoRaPacketParams::default().into(),
     )
     .unwrap();
-    lora.write_register(spi1, delay, sx126x::reg::Register::RxGain, &[0x96])
-        .unwrap();
-    //Set the device in receiving mode
+
+    // Unmask the EXTI15_10 ISR in the NVIC register
+    unsafe {
+        stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
+    }
+    // Set the device in receiving mode
     lora.set_rx(spi1, delay, rx_timeout).unwrap();
-    DIO1_RISEN.store(false, Ordering::SeqCst);
     loop {
         if DIO1_RISEN.swap(false, Ordering::Relaxed) {
             lora.clear_irq_status(spi1, delay, IrqMask::all()).unwrap();
@@ -165,15 +172,25 @@ fn main() -> ! {
                     }
                     hprintln!("\"").unwrap();
 
-                    lora.write_bytes(spi1, delay, b"Hello from sx126x-rs!", 0.into(), 8, crc_type)
-                        .unwrap();
+                    // Send a message back
+                    lora.write_bytes(
+                        spi1,
+                        delay,
+                        b"Hello from sx126x-rs!",
+                        tx_timeout,
+                        8,
+                        crc_type,
+                    )
+                    .unwrap();
                     led_pin.set_low().unwrap();
                 }
-                Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
+
                 Some(CommandTxDone) => {
+                    // Se the device in Rx mode when done sending response message
                     lora.set_rx(spi1, delay, rx_timeout).unwrap();
                 }
-                x => hprintln!("Other: {:?}", x).unwrap(),
+                Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
+                other => hprintln!("Other: {:?}", other).unwrap(),
             }
         }
     }
@@ -215,7 +232,9 @@ fn build_config() -> LoRaConfig {
     }
 }
 
-/// Wraps a mutable reference to a Dio1Pin.
+/// Wraps a mutable reference to a Dio1Pin,
+/// so we can implement `embedded_hal::digital::v2::InputPin` for it,
+/// which is necessary in order to pass it to the SX126x driver.
 struct Dio1PinRefMut<'dio1>(&'dio1 mut Dio1Pin);
 
 impl<'dio1> embedded_hal::digital::v2::InputPin for Dio1PinRefMut<'dio1> {

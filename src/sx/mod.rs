@@ -486,9 +486,10 @@ where
         spi.write(&[0x8F, tx_base_addr, rx_base_addr])
     }
 
-    /// Send a message. This methods writes the data in the buffer,
+    /// High level method to send a message. This methods writes the data in the buffer,
     /// puts the device in TX mode, and waits until the devices
-    /// is done sending the data or a timeout occurs
+    /// is done sending the data or a timeout occurs.
+    /// Please note that this method updates the packet params
     pub fn write_bytes<'spi, 'data>(
         &mut self,
         spi: &'spi mut TSPI,
