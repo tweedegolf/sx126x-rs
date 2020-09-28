@@ -2,7 +2,7 @@
 #![no_main]
 
 use sx126x::conf::Config as LoRaConfig;
-use sx126x::op::status::CommandStatus::{CommandTimeout, DataAvailable};
+use sx126x::op::status::CommandStatus::{CommandTimeout, CommandTxDone, DataAvailable};
 use sx126x::op::*;
 use sx126x::SX126x;
 
@@ -120,7 +120,6 @@ fn main() -> ! {
     let rx_timeout = RxTxTimeout::from_ms(3000);
     let crc_type = packet::lora::LoRaCrcType::CrcOn;
 
-    // Blink LED to indicate the whole program has run to completion
     let mut led_pin = gpioa
         .pa10
         .into_push_pull_output_with_state(&mut gpioa.crh, State::Low);
@@ -146,27 +145,36 @@ fn main() -> ! {
             let status = lora.get_status(spi1, delay).unwrap();
             match status.command_status() {
                 Some(DataAvailable) => {
+                    led_pin.set_high().unwrap();
                     // Get payload length and start offset in rx buffer
                     let buffer_status = lora.get_rx_buffer_status(spi1, delay).unwrap();
                     let payload_len = buffer_status.payload_length_rx();
                     let start_offset = buffer_status.rx_start_buffer_pointer();
 
                     hprint!("Message {}, {}: \"", start_offset, payload_len).unwrap();
-                    // Read the received message in chunks of 8 bytes                   
+                    // Read the received message in chunks of 8 bytes
                     let mut chunk_result = [0u8; 8];
                     for i in (0..payload_len).step_by(8) {
                         let end = (payload_len - i).min(8) as usize;
                         lora.read_buffer(spi1, delay, i + start_offset, &mut chunk_result[..end])
                             .unwrap();
-                        use core::str;
-                        hprint!("{}", unsafe { str::from_utf8_unchecked(&chunk_result) }).unwrap();
+                        hprint!("{}", unsafe {
+                            core::str::from_utf8_unchecked(&chunk_result)
+                        })
+                        .unwrap();
                     }
                     hprintln!("\"").unwrap();
+
+                    lora.write_bytes(spi1, delay, b"Hello from sx126x-rs!", 0.into(), 8, crc_type)
+                        .unwrap();
+                    led_pin.set_low().unwrap();
                 }
                 Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
+                Some(CommandTxDone) => {
+                    lora.set_rx(spi1, delay, rx_timeout).unwrap();
+                }
                 x => hprintln!("Other: {:?}", x).unwrap(),
             }
-            lora.set_rx(spi1, delay, rx_timeout).unwrap();
         }
     }
 }
