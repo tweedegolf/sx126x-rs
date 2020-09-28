@@ -523,6 +523,21 @@ where
         Ok(status)
     }
 
+    /// Get Rx buffer status, containing the length of the last received packet
+    /// and the address of the first byte received.
+    pub fn get_rx_buffer_status<'spi>(
+        &mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<RxBufferStatus, SpiError<TSPI>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        let mut result = [NOP, NOP];
+        spi.transfer(&mut [0x13, NOP])
+            .and_then(|_| spi.transfer(&mut result))?;
+
+        Ok(result.into())
+    }
+
     /// Busily wait for the busy pin to go low
     fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns

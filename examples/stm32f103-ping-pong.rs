@@ -10,7 +10,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use cortex_m_rt::entry;
-use cortex_m_semihosting::hprintln;
+use cortex_m_semihosting::{hprint, hprintln};
 use embedded_hal::digital::v2::OutputPin;
 use panic_semihosting as _;
 use stm32f1xx_hal::delay::Delay;
@@ -28,7 +28,6 @@ const F_XTAL: u32 = 32_000_000; // 32MHz
 
 static mut DIO1_PIN: MaybeUninit<Dio1Pin> = MaybeUninit::uninit();
 static DIO1_RISEN: AtomicBool = AtomicBool::new(true);
-
 #[interrupt]
 fn EXTI15_10() {
     let int_pin = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
@@ -146,7 +145,24 @@ fn main() -> ! {
             lora.clear_irq_status(spi1, delay, IrqMask::all()).unwrap();
             let status = lora.get_status(spi1, delay).unwrap();
             match status.command_status() {
-                Some(DataAvailable) => hprintln!("DataAvailable").unwrap(),
+                Some(DataAvailable) => {
+                    // Get payload length and start offset in rx buffer
+                    let buffer_status = lora.get_rx_buffer_status(spi1, delay).unwrap();
+                    let payload_len = buffer_status.payload_length_rx();
+                    let start_offset = buffer_status.rx_start_buffer_pointer();
+
+                    hprint!("Message {}, {}: \"", start_offset, payload_len).unwrap();
+                    // Read the received message in chunks of 8 bytes                   
+                    let mut chunk_result = [0u8; 8];
+                    for i in (0..payload_len).step_by(8) {
+                        let end = (payload_len - i).min(8) as usize;
+                        lora.read_buffer(spi1, delay, i + start_offset, &mut chunk_result[..end])
+                            .unwrap();
+                        use core::str;
+                        hprint!("{}", unsafe { str::from_utf8_unchecked(&chunk_result) }).unwrap();
+                    }
+                    hprintln!("\"").unwrap();
+                }
                 Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
                 x => hprintln!("Other: {:?}", x).unwrap(),
             }

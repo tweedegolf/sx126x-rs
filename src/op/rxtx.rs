@@ -133,3 +133,27 @@ impl PaConfig {
         self
     }
 }
+
+pub struct RxBufferStatus {
+    payload_length_rx: u8,
+    rx_start_buffer_pointer: u8,
+}
+
+impl From<[u8; 2]> for RxBufferStatus {
+    fn from(raw: [u8; 2]) -> Self {
+        Self {
+            payload_length_rx: raw[0],
+            rx_start_buffer_pointer: raw[1],
+        }
+    }
+}
+
+impl RxBufferStatus {
+    pub fn payload_length_rx(&self) -> u8 {
+        self.payload_length_rx
+    }
+
+    pub fn rx_start_buffer_pointer(&self) -> u8 {
+        self.rx_start_buffer_pointer
+    }
+}
