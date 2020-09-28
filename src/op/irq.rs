@@ -51,6 +51,12 @@ impl From<u16> for IrqMask {
     }
 }
 
+impl Default for IrqMask {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct IrqStatus {
     inner: u16,

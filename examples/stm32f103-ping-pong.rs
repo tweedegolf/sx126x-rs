@@ -10,6 +10,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use cortex_m_rt::entry;
+use cortex_m_semihosting::hprintln;
 use embedded_hal::digital::v2::OutputPin;
 use panic_semihosting as _;
 use stm32f1xx_hal::delay::Delay;
@@ -117,7 +118,7 @@ fn main() -> ! {
     lora.init(spi1, delay, conf).unwrap();
 
     // let tx_timeout = 0.into(); // TX timeout disabled
-    let rx_timeout = RxTxTimeout::from_ms(1000);
+    let rx_timeout = RxTxTimeout::from_ms(3000);
     let crc_type = packet::lora::LoRaCrcType::CrcOn;
 
     // Blink LED to indicate the whole program has run to completion
@@ -129,27 +130,28 @@ fn main() -> ! {
         stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
     }
 
-    // Send LoRa message
+    lora.set_packet_params(
+        spi1,
+        delay,
+        sx126x::op::packet::lora::LoRaPacketParams::default().into(),
+    )
+    .unwrap();
+    lora.write_register(spi1, delay, sx126x::reg::Register::RxGain, &[0x96])
+        .unwrap();
     //Set the device in receiving mode
     lora.set_rx(spi1, delay, rx_timeout).unwrap();
     DIO1_RISEN.store(false, Ordering::SeqCst);
     loop {
-        // led_pin.set_high().unwrap();
-
         if DIO1_RISEN.swap(false, Ordering::Relaxed) {
+            lora.clear_irq_status(spi1, delay, IrqMask::all()).unwrap();
             let status = lora.get_status(spi1, delay).unwrap();
-            if let Some(DataAvailable) = status.command_status() {
-                led_pin.set_high();
-                // TODO: fetch received payload
-                // Send LoRa message
+            match status.command_status() {
+                Some(DataAvailable) => hprintln!("DataAvailable").unwrap(),
+                Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
+                x => hprintln!("Other: {:?}", x).unwrap(),
             }
-            // lora.write_bytes(spi1, delay, b"Pongpong", tx_timeout, 8, crc_type)
-            //     .unwrap();
-            // lora.set_rx(spi1, delay, rx_timeout).unwrap();
-            // led_pin.set_low();
+            lora.set_rx(spi1, delay, rx_timeout).unwrap();
         }
-
-        delay.delay_ms(1000u16);
     }
 }
 

@@ -87,7 +87,7 @@ pub mod lora {
     impl Default for LoRaPacketParams {
         fn default() -> Self {
             Self {
-                preamble_len: 0x0000,
+                preamble_len: 0x0008,
                 header_type: LoRaHeaderType::VarLen,
                 payload_len: 0x00,
                 crc_type: LoRaCrcType::CrcOff,
