@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 cortex-m = "0.6.2"
+anyhow = {version = "1.0.32", default-features = false }
 
 [dev-dependencies]
 cortex-m-rt = "0.6.12"

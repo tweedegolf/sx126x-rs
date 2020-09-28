@@ -96,6 +96,7 @@ fn main() -> ! {
         .pa9
         .into_push_pull_output_with_state(&mut gpioa.crh, State::High);
 
+    // This is safe as long as the only other place we use DIO1_PIN is in the ISR
     let lora_dio1 = unsafe { &mut *DIO1_PIN.as_mut_ptr() };
 
     // Configure dio1 pin as interrupt source and store a reference to it in

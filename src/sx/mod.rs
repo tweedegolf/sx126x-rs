@@ -11,7 +11,7 @@ use embedded_hal::digital::v2::OutputPin;
 use crate::conf::Config;
 use crate::op::*;
 use crate::reg::*;
-use err::OutputPinError;
+// use err::OutputPinError;
 use slave_select::*;
 
 type Pins<TNSS, TNRST, TBUSY, TANT, TDIO1> = (TNSS, TNRST, TBUSY, TANT, TDIO1);
@@ -41,17 +41,16 @@ pub struct SX126x<TSPI, TNSS: OutputPin, TNRST, TBUSY, TANT, TDIO1> {
     dio1_pin: TDIO1,
 }
 
-impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1, TWERR, TTERR>
+impl<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1, TSPIERR, TPINERR>
     SX126x<TSPI, TNSS, TNRST, TBUSY, TANT, TDIO1>
 where
-    TWERR: core::fmt::Debug,
-    TTERR: core::fmt::Debug,
-    TSPI: Write<u8, Error = TWERR> + Transfer<u8, Error = TTERR>,
-    TNSS: OutputPin<Error = Infallible>,
-    TNRST: OutputPin<Error = Infallible>,
-    TBUSY: InputPin<Error = Infallible>,
-    TANT: OutputPin<Error = Infallible>,
-    TDIO1: InputPin<Error = Infallible>,
+    TPINERR: core::fmt::Debug,
+    TSPI: Write<u8, Error = TSPIERR> + Transfer<u8, Error = TSPIERR>,
+    TNSS: OutputPin<Error = TPINERR>,
+    TNRST: OutputPin<Error = TPINERR>,
+    TBUSY: InputPin<Error = TPINERR>,
+    TANT: OutputPin<Error = TPINERR>,
+    TDIO1: InputPin<Error = TPINERR>,
 {
     // Create a new SX126x
     pub fn new(pins: Pins<TNSS, TNRST, TBUSY, TANT, TDIO1>) -> Self {
@@ -322,7 +321,7 @@ where
     }
 
     /// Reset the device py pulling nrst low for a while
-    pub fn reset(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), OutputPinError<TNRST>> {
+    pub fn reset(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), TPINERR> {
         cortex_m::interrupt::free(|_| {
             self.nrst_pin.set_low()?;
             // 8.1: The pin should be held low for typically 100 μs for the Reset to happen
@@ -332,7 +331,7 @@ where
     }
 
     /// Enable antenna
-    pub fn set_ant_enabled(&mut self, enabled: bool) -> Result<(), OutputPinError<TANT>> {
+    pub fn set_ant_enabled(&mut self, enabled: bool) -> Result<(), TPINERR> {
         if enabled {
             self.ant_pin.set_high()
         } else {
@@ -564,7 +563,7 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, OutputPinError<TNSS>> {
+    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, TPINERR> {
         self.wait_on_busy(delay);
         let s = self.slave_select.select(spi)?;
         // Table 8-1: Data sheet specifies a minumum delay of 32ns between falling edge of nss and sck setup,

@@ -1,4 +1,3 @@
-use super::OutputPinError;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
 
@@ -23,7 +22,7 @@ impl<TNSS: OutputPin> SlaveSelect<TNSS> {
     pub fn select<'spi, TSPI: Write<u8> + Transfer<u8>>(
         &'spi mut self,
         spi: &'spi mut TSPI,
-    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, OutputPinError<TNSS>> {
+    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, <TNSS as OutputPin>::Error> {
         self.nss.set_low()?;
         Ok(SlaveSelectGuard {
             nss: &mut self.nss,

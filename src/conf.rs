@@ -1,3 +1,4 @@
+//! Wrapper for modem configuration parameters
 use super::op::*;
 
 /// Configuration parameters.

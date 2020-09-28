@@ -1,3 +1,4 @@
+//! Registers as defined in chapter 12
 #[allow(dead_code)]
 #[repr(u16)]
 /// Every register defined in the SX126X datasheet
