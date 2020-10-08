@@ -1,7 +1,6 @@
 pub(crate) mod err;
 mod slave_select;
 
-use core::convert::Infallible;
 use core::marker::PhantomData;
 use embedded_hal::blocking::delay::{DelayMs, DelayUs};
 use embedded_hal::blocking::spi::{Transfer, Write};
@@ -14,9 +13,9 @@ use crate::reg::*;
 // use err::OutputPinError;
 use slave_select::*;
 
-type Pins<TNSS, TNRST, TBUSY, TANT, TDIO1> = (TNSS, TNRST, TBUSY, TANT, TDIO1);
+use self::err::{PinError, SxError};
 
-pub type SpiError<TSPI> = err::SpiError<<TSPI as Write<u8>>::Error, <TSPI as Transfer<u8>>::Error>;
+type Pins<TNSS, TNRST, TBUSY, TANT, TDIO1> = (TNSS, TNRST, TBUSY, TANT, TDIO1);
 
 const NOP: u8 = 0x00;
 
@@ -71,9 +70,9 @@ where
         spi: &mut TSPI,
         delay: &mut (impl DelayUs<u32> + DelayMs<u32>),
         conf: Config,
-    ) -> Result<(), SpiError<TSPI>> {
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
         // Reset the sx
-        self.reset(delay).unwrap();
+        self.reset(delay)?;
 
         // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
         self.set_standby(spi, delay, crate::op::StandbyConfig::StbyRc)?;
@@ -125,11 +124,9 @@ where
         self.set_dio2_as_rf_switch_ctrl(spi, delay, true)?;
 
         // 11. Define Sync Word value: use the command WriteReg(...) to write the value of the register via direct register access
-        self.set_sync_word(spi, delay, conf.sync_word)?;
+        self.set_sync_word(spi, delay, conf.sync_word)
 
-        // The rest of the steps are done in Self::write_bytes
-
-        Ok(())
+        // The rest of the steps are done by the user
     }
 
     /// Set the LoRa Sync word
@@ -140,7 +137,7 @@ where
         spi: &mut TSPI,
         delay: &mut impl DelayUs<u32>,
         sync_word: u16,
-    ) -> Result<(), SpiError<TSPI>> {
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
         self.write_register(
             spi,
             delay,
@@ -156,9 +153,9 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         packet_type: PacketType,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x8A, packet_type as u8])
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x8A, packet_type as u8]).map_err(Into::into)
     }
 
     /// Put the modem in standby mode
@@ -167,9 +164,9 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         standby_config: StandbyConfig,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x80, standby_config as u8])
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x80, standby_config as u8]).map_err(Into::into)
     }
 
     /// Get the current status of the modem
@@ -177,8 +174,8 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<Status, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<Status, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut result = [NOP];
         spi.transfer(&mut [0xC0])
             .and_then(|_| spi.transfer(&mut result))?;
@@ -192,10 +189,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         freq: CalibImageFreq,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let freq: [u8; 2] = freq.into();
-        spi.write(&[0x98]).and_then(|_| spi.write(&freq))
+        spi.write(&[0x98])
+            .and_then(|_| spi.write(&freq))
+            .map_err(Into::into)
     }
 
     /// Calibrate modem
@@ -204,9 +203,9 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         calib_param: CalibParam,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x89, calib_param.into()])
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x89, calib_param.into()]).map_err(Into::into)
     }
 
     /// Write data into a register
@@ -216,15 +215,15 @@ where
         delay: &mut impl DelayUs<u32>,
         register: Register,
         data: &[u8],
-    ) -> Result<(), SpiError<TSPI>> {
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
         let start_addr = (register as u16).to_be_bytes();
 
-        let mut spi = self.slave_select(spi, delay).unwrap();
+        let mut spi = self.slave_select(spi, delay)?;
         let r = spi
             .write(&[0x0D])
             .and_then(|_| spi.write(&start_addr))
-            .and_then(|_| spi.write(data));
-        r
+            .and_then(|_| spi.write(data))?;
+        Ok(r)
     }
 
     /// Read data from a register
@@ -234,10 +233,10 @@ where
         delay: &mut impl DelayUs<u32>,
         start_addr: u16,
         result: &mut [u8],
-    ) -> Result<(), SpiError<TSPI>> {
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
         debug_assert!(result.len() >= 1);
         let mut start_addr = start_addr.to_be_bytes();
-        let mut spi = self.slave_select(spi, delay).unwrap();
+        let mut spi = self.slave_select(spi, delay)?;
 
         spi.transfer(&mut [0x1D])
             .and_then(|_| spi.transfer(&mut start_addr))
@@ -252,9 +251,11 @@ where
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         data: &[u8],
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x0E, offset]).and_then(|_| spi.write(data))
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x0E, offset])
+            .and_then(|_| spi.write(data))
+            .map_err(Into::into)
     }
 
     /// Read data from the data from the defined offset
@@ -264,12 +265,13 @@ where
         delay: &mut impl DelayUs<u32>,
         offset: u8,
         result: &mut [u8],
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut header = [0x1E, offset, NOP];
         spi.transfer(&mut header)
             .and_then(|_| spi.transfer(result))
             .map(|_| {})
+            .map_err(Into::into)
     }
 
     /// Configure the dio2 pin as RF control switch
@@ -278,9 +280,9 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         enable: bool,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x9D, enable as u8])
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x9D, enable as u8]).map_err(Into::into)
     }
 
     /// Configure the dio3 pin as TCXO control switch
@@ -290,11 +292,12 @@ where
         delay: &mut impl DelayUs<u32>,
         tcxo_voltage: TcxoVoltage,
         tcxo_delay: TcxoDelay,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let tcxo_delay: [u8; 3] = tcxo_delay.into();
         spi.write(&[0x97, tcxo_voltage as u8])
             .and_then(|_| spi.write(&tcxo_delay))
+            .map_err(Into::into)
     }
 
     /// Clear device error register
@@ -302,9 +305,9 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
-        spi.write(&[0x07, NOP, NOP])
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        spi.write(&[0x07, NOP, NOP]).map_err(Into::into)
     }
 
     /// Get current device errors
@@ -312,8 +315,8 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<DeviceErrors, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<DeviceErrors, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut result = [NOP; 2];
         spi.transfer(&mut [0x17, NOP])
             .and_then(|_| spi.transfer(&mut result))?;
@@ -321,12 +324,12 @@ where
     }
 
     /// Reset the device py pulling nrst low for a while
-    pub fn reset(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), TPINERR> {
+    pub fn reset(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
         cortex_m::interrupt::free(|_| {
-            self.nrst_pin.set_low()?;
+            self.nrst_pin.set_low().map_err(PinError::Output)?;
             // 8.1: The pin should be held low for typically 100 μs for the Reset to happen
             delay.delay_us(200);
-            self.nrst_pin.set_high()
+            self.nrst_pin.set_high().map_err(PinError::Output)
         })
     }
 
@@ -348,13 +351,14 @@ where
         dio1_mask: IrqMask,
         dio2_mask: IrqMask,
         dio3_mask: IrqMask,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         spi.write(&[0x08])
             .and_then(|_| spi.write(&(Into::<u16>::into(irq_mask)).to_be_bytes()))
             .and_then(|_| spi.write(&(Into::<u16>::into(dio1_mask)).to_be_bytes()))
             .and_then(|_| spi.write(&(Into::<u16>::into(dio2_mask)).to_be_bytes()))
             .and_then(|_| spi.write(&(Into::<u16>::into(dio3_mask)).to_be_bytes()))
+            .map_err(Into::into)
     }
 
     /// Get the current IRQ status
@@ -362,8 +366,8 @@ where
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<IrqStatus, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<IrqStatus, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         spi.write(&[0x12])?;
         let mut status = [NOP, NOP];
         spi.transfer(&mut status)?;
@@ -376,11 +380,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         mask: IrqMask,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mask: u16 = mask.into();
         spi.write(&[0x02])
             .and_then(|_| spi.write(&mask.to_be_bytes()))
+            .map_err(Into::into)
     }
 
     /// Put the device in TX mode. It will start sending the data written in the buffer,
@@ -390,8 +395,8 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         timeout: RxTxTimeout,
-    ) -> Result<Status, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<Status, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut timeout: [u8; 3] = timeout.into();
 
         let _ = spi.write(&[0x83]);
@@ -404,8 +409,8 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         timeout: RxTxTimeout,
-    ) -> Result<Status, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<Status, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut timeout: [u8; 3] = timeout.into();
 
         let _ = spi.write(&[0x82]);
@@ -419,10 +424,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: PacketParams,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let params: [u8; 9] = params.into();
-        spi.write(&[0x8C]).and_then(|_| spi.write(&params))
+        spi.write(&[0x8C])
+            .and_then(|_| spi.write(&params))
+            .map_err(Into::into)
     }
 
     /// Set modulation parameters
@@ -431,10 +438,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: ModParams,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let params: [u8; 8] = params.into();
-        spi.write(&[0x8B]).and_then(|_| spi.write(&params))
+        spi.write(&[0x8B])
+            .and_then(|_| spi.write(&params))
+            .map_err(Into::into)
     }
 
     /// Set TX parameters
@@ -443,10 +452,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         params: TxParams,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let params: [u8; 2] = params.into();
-        spi.write(&[0x8E]).and_then(|_| spi.write(&params))
+        spi.write(&[0x8E])
+            .and_then(|_| spi.write(&params))
+            .map_err(Into::into)
     }
 
     /// Set RF frequency. This writes the passed rf_freq directly to the modem.
@@ -457,10 +468,11 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         rf_freq: u32,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         spi.write(&[0x86])
             .and_then(|_| spi.write(&rf_freq.to_be_bytes()))
+            .map_err(Into::into)
     }
 
     /// Set Power Amplifier configuration
@@ -469,10 +481,12 @@ where
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
         pa_config: PaConfig,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let pa_config: [u8; 4] = pa_config.into();
-        spi.write(&[0x95]).and_then(|_| spi.write(&pa_config))
+        spi.write(&[0x95])
+            .and_then(|_| spi.write(&pa_config))
+            .map_err(Into::into)
     }
 
     /// Configure the base addresses in the buffer
@@ -482,9 +496,10 @@ where
         delay: &mut impl DelayUs<u32>,
         tx_base_addr: u8,
         rx_base_addr: u8,
-    ) -> Result<(), SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         spi.write(&[0x8F, tx_base_addr, rx_base_addr])
+            .map_err(Into::into)
     }
 
     /// High level method to send a message. This methods writes the data in the buffer,
@@ -499,7 +514,7 @@ where
         timeout: RxTxTimeout,
         preamble_len: u16,
         crc_type: packet::lora::LoRaCrcType,
-    ) -> Result<Status, SpiError<TSPI>> {
+    ) -> Result<Status, SxError<TSPIERR, TPINERR>> {
         use packet::lora::LoRaPacketParams;
         // Write data to buffer
         self.write_buffer(spi, delay, 0x00, data)?;
@@ -516,9 +531,9 @@ where
         // Set tx mode
         let status = self.set_tx(spi, delay, timeout)?;
         // Wait for busy line to go low
-        self.wait_on_busy(delay);
+        self.wait_on_busy(delay)?;
         // Wait on dio1 going high
-        self.wait_on_dio1();
+        self.wait_on_dio1()?;
         // Clear IRQ
         self.clear_irq_status(spi, delay, IrqMask::all())?;
         // Write completed!
@@ -531,8 +546,8 @@ where
         &mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<RxBufferStatus, SpiError<TSPI>> {
-        let mut spi = self.slave_select(spi, delay).unwrap();
+    ) -> Result<RxBufferStatus, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
         let mut result = [NOP, NOP];
         spi.transfer(&mut [0x13, NOP])
             .and_then(|_| spi.transfer(&mut result))?;
@@ -541,19 +556,21 @@ where
     }
 
     /// Busily wait for the busy pin to go low
-    fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) {
+    fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns
         delay.delay_us(1);
-        while self.busy_pin.is_high().unwrap() {
+        while let Ok(true) = self.busy_pin.is_high() {
             cortex_m::asm::nop();
         }
+        Ok(())
     }
 
     /// Busily wait for the dio1 pin to go high
-    fn wait_on_dio1(&mut self) {
-        while self.dio1_pin.is_low().unwrap() {
+    fn wait_on_dio1(&mut self)-> Result<(), PinError<TPINERR>> {
+        while let Ok(true) = self.dio1_pin.is_low() {
             cortex_m::asm::nop();
         }
+        Ok(())
     }
 
     /// Waits until the busy pin goes low, then pulls the nss pin low,
@@ -563,8 +580,8 @@ where
         &'spi mut self,
         spi: &'spi mut TSPI,
         delay: &mut impl DelayUs<u32>,
-    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, TPINERR> {
-        self.wait_on_busy(delay);
+    ) -> Result<SlaveSelectGuard<TNSS, TSPI>, PinError<TPINERR>> {
+        self.wait_on_busy(delay)?;
         let s = self.slave_select.select(spi)?;
         // Table 8-1: Data sheet specifies a minumum delay of 32ns between falling edge of nss and sck setup,
         // though embedded_hal provides no trait for delaying in nanosecond resolution.

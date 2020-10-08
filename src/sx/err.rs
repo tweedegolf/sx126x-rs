@@ -1,14 +1,11 @@
 use core::fmt::{self, Debug};
-use embedded_hal::digital::v2::OutputPin;
 
-// pub type OutputPinError<TPIN> = <TPIN as OutputPin>::Error;
-
-pub enum SpiError<TWERR, TTERR> {
-    Write(TWERR),
-    Transfer(TTERR),
+pub enum SpiError<TSPIERR> {
+    Write(TSPIERR),
+    Transfer(TSPIERR),
 }
 
-impl<TWERR: Debug, TTERR: Debug> Debug for SpiError<TWERR, TTERR> {
+impl<TSPIERR: Debug> Debug for SpiError<TSPIERR> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Write(err) => write!(f, "Write({:?})", err),
@@ -17,20 +14,42 @@ impl<TWERR: Debug, TTERR: Debug> Debug for SpiError<TWERR, TTERR> {
     }
 }
 
+pub enum PinError<TPINERR> {
+    Output(TPINERR),
+    Input(TPINERR),
+}
+
+impl<TPINERR: Debug> Debug for PinError<TPINERR> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Output(err) => write!(f, "Output({:?})", err),
+            Self::Input(err) => write!(f, "Input({:?})", err),
+        }
+    }
+}
+
 pub enum SxError<TSPIERR, TPINERR> {
-    SpiWrite(TSPIERR),
-    SpiTransfer(TSPIERR),
-    OutputPin(TPINERR),
-    InputPin(TPINERR),
+    Spi(SpiError<TSPIERR>),
+    Pin(PinError<TPINERR>),
 }
 
 impl<TSPIERR: Debug, TPINERR: Debug> Debug for SxError<TSPIERR, TPINERR> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SpiWrite(err) => write!(f, "Write({:?})", err),
-            Self::SpiTransfer(err) => write!(f, "Transfer({:?})", err),
-            Self::OutputPin(err) => write!(f, "OutputPin({:?})", err),
-            Self::InputPin(err) => write!(f, "InputPin({:?})", err),
+            Self::Spi(err) => write!(f, "Spi({:?})", err),
+            Self::Pin(err) => write!(f, "Pin({:?})", err),
         }
+    }
+}
+
+impl<TSPIERR, TPINERR> From<SpiError<TSPIERR>> for SxError<TSPIERR, TPINERR> {
+    fn from(spi_err: SpiError<TSPIERR>) -> Self {
+        SxError::Spi(spi_err)
+    }
+}
+
+impl<TSPIERR, TPINERR> From<PinError<TPINERR>> for SxError<TSPIERR, TPINERR> {
+    fn from(spi_err: PinError<TPINERR>) -> Self {
+        SxError::Pin(spi_err)
     }
 }
