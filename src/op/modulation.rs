@@ -25,7 +25,7 @@ pub mod lora {
 
     #[derive(Copy, Clone)]
     #[repr(u8)]
-    pub enum LoraBandWidth {
+    pub enum LoRaBandWidth {
         /// 7.81 kHz
         BW7 = 0x00,
         /// 10.42 kHz
@@ -59,7 +59,7 @@ pub mod lora {
 
     pub struct LoraModParams {
         spread_factor: LoRaSpreadFactor,
-        bandwith: LoraBandWidth,
+        bandwidth: LoRaBandWidth,
         coding_rate: LoraCodingRate,
         /// LowDataRateOptimize
         low_dr_opt: bool,
@@ -69,10 +69,30 @@ pub mod lora {
         fn default() -> Self {
             Self {
                 spread_factor: LoRaSpreadFactor::SF7,
-                bandwith: LoraBandWidth::BW125,
+                bandwidth: LoRaBandWidth::BW125,
                 coding_rate: LoraCodingRate::CR4_5,
                 low_dr_opt: false,
             }
+        }
+    }
+
+    impl LoraModParams {
+        pub fn set_spread_factor(mut self, spread_factor: LoRaSpreadFactor) -> Self {
+            self.spread_factor = spread_factor;
+            self
+        }
+        pub fn set_bandwidth(mut self, bandwidth: LoRaBandWidth) -> Self {
+            self.bandwidth = bandwidth;
+            self
+        }
+        pub fn set_coding_rate(mut self, coding_rate: LoraCodingRate) -> Self {
+            self.coding_rate = coding_rate;
+            self
+        }
+        
+        pub fn set_low_dr_opt(mut self, low_dr_opt: bool) -> Self {
+            self.low_dr_opt = low_dr_opt;
+            self
         }
     }
 
@@ -81,7 +101,7 @@ pub mod lora {
             ModParams {
                 inner: [
                     self.spread_factor as u8,
-                    self.bandwith as u8,
+                    self.bandwidth as u8,
                     self.coding_rate as u8,
                     self.low_dr_opt as u8,
                     0x00,

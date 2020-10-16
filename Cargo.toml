@@ -4,8 +4,6 @@ version = "0.1.0"
 authors = ["Henk Dieter Oordt <henkdieter@oordt.net>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 cortex-m = "0.6.2"
@@ -23,11 +21,11 @@ features = ["stm32f103", "rt", "medium"]
 
 [profile.dev]
 opt-level = 0
-debug = true # symbols are nice and they don't increase the size on Flash
-lto = false # better optimizations
+debug = true
+lto = false
 
 [profile.release]
 opt-level = 3
-codegen-units = 1 # less threads, better optimizations
-debug = true # symbols are nice and they don't increase the size on Flash
-lto = true # better optimizations
+codegen-units = 1
+debug = true
+lto = true

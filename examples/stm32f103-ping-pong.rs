@@ -137,6 +137,7 @@ fn main() -> ! {
     unsafe {
         stm32::NVIC::unmask(stm32::Interrupt::EXTI15_10);
     }
+
     // Set the device in receiving mode
     lora.set_rx(spi1, delay, rx_timeout).unwrap();
     loop {
@@ -191,8 +192,8 @@ fn main() -> ! {
 
 fn build_config() -> LoRaConfig {
     use sx126x::op::{
-        irq::IrqMaskBit::*, modulation::lora::LoraModParams, rxtx::DeviceSel::SX1261,
-        packet::lora::LoRaPacketParams, PacketType::LoRa,
+        irq::IrqMaskBit::*, modulation::lora::*, packet::lora::LoRaPacketParams,
+        rxtx::DeviceSel::SX1261, PacketType::LoRa,
     };
 
     let mod_params = LoraModParams::default().into();
