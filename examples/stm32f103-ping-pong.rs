@@ -152,9 +152,9 @@ fn main() -> ! {
                     let start_offset = buffer_status.rx_start_buffer_pointer();
 
                     hprint!("Message {}, {}: \"", start_offset, payload_len).unwrap();
-                    // Read the received message in chunks of 8 bytes
-                    let mut chunk_result = [0u8; 8];
-                    for i in (0..payload_len).step_by(8) {
+                    // Read the received message in chunks of 32 bytes
+                    let mut chunk_result = [0u8; 32];
+                    for i in (0..payload_len).step_by(chunk_result.len()) {
                         let end = (payload_len - i).min(chunk_result.len() as u8) as usize;
                         lora.read_buffer(spi1, delay, i + start_offset, &mut chunk_result[..end])
                             .unwrap();
@@ -179,7 +179,7 @@ fn main() -> ! {
                 }
 
                 Some(CommandTxDone) => {
-                    // Se the device in Rx mode when done sending response message
+                    // Set the device in Rx mode when done sending response message
                     lora.set_rx(spi1, delay, rx_timeout).unwrap();
                 }
                 Some(CommandTimeout) => hprintln!("CommandTimeout").unwrap(),
@@ -215,7 +215,7 @@ fn build_config() -> LoRaConfig {
     LoRaConfig {
         packet_type: LoRa,
         sync_word: 0x1424, // Private networks
-        calib_param: CalibParam::from(0x7F & 0b1111_1111),
+        calib_param: CalibParam::from(0x7F),
         mod_params,
         tx_params,
         pa_config,
