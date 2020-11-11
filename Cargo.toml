@@ -1,6 +1,6 @@
 [package]
 name = "sx126x"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Henk Dieter Oordt <henkdieter@oordt.net>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -22,7 +22,6 @@ exclude = [
 [dependencies]
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 cortex-m = "0.6.2"
-anyhow = {version = "1.0.32", default-features = false }
 
 [dev-dependencies]
 cortex-m-rt = "0.6.12"
