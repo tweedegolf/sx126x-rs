@@ -66,3 +66,22 @@ impl Status {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct Stats {
+    status: Status,
+    rx_pkt: u16,
+    crc_error: u16,
+    header_error: u16,
+}
+
+impl From<[u8; 7]> for Stats {
+    fn from(b: [u8; 7]) -> Self {
+        Self {
+            status: b[0].into(),
+            rx_pkt: u16::from_be_bytes([b[1], b[2]]),
+            crc_error: u16::from_be_bytes([b[3], b[4]]),
+            header_error: u16::from_be_bytes([b[5], b[6]]),
+        }
+    }
+}

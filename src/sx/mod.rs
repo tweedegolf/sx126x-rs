@@ -183,6 +183,19 @@ where
         Ok(result[0].into())
     }
 
+    pub fn get_stats<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<Stats, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        let mut result = [NOP; 7];
+        spi.transfer(&mut [0x10])
+            .and_then(|_| spi.transfer(&mut result))?;
+
+        Ok(result.into())
+    }
+
     /// Calibrate image
     pub fn calibrate_image<'spi>(
         &'spi mut self,
