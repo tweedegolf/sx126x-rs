@@ -16,7 +16,7 @@ impl core::fmt::Debug for Status {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ChipMode {
     StbyRC = 0x02,
     StbyXOSC = 0x03,
