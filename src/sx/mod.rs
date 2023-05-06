@@ -183,6 +183,16 @@ where
         Ok(result[0].into())
     }
 
+    pub fn set_fs<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        spi.transfer(&mut [0xC1])?;
+        Ok(())
+    }
+
     pub fn get_stats<'spi>(
         &'spi mut self,
         spi: &'spi mut TSPI,
@@ -579,7 +589,7 @@ where
     }
 
     /// Busily wait for the dio1 pin to go high
-    fn wait_on_dio1(&mut self)-> Result<(), PinError<TPINERR>> {
+    fn wait_on_dio1(&mut self) -> Result<(), PinError<TPINERR>> {
         while let Ok(true) = self.dio1_pin.is_low() {
             cortex_m::asm::nop();
         }
