@@ -134,6 +134,7 @@ impl PaConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct RxBufferStatus {
     payload_length_rx: u8,
     rx_start_buffer_pointer: u8,
