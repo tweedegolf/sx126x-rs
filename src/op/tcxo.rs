@@ -22,6 +22,12 @@ impl Into<[u8; 3]> for TcxoDelay {
     }
 }
 
+impl From<[u8; 3]> for TcxoDelay {
+    fn from(b: [u8; 3]) -> Self {
+        Self { inner: b }
+    }
+}
+
 impl TcxoDelay {
     pub const fn from_ms(ms: u32) -> Self {
         let inner = ms << 6;
