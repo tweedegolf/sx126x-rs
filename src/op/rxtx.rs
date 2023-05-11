@@ -16,6 +16,10 @@ impl RxTxTimeout {
         let inner = [inner[2], inner[1], inner[0]];
         Self { inner }
     }
+
+    pub const fn continuous_rx() -> Self {
+        Self { inner: [0xFF, 0xFF, 0xFF] }
+    }
 }
 
 impl From<u32> for RxTxTimeout {
