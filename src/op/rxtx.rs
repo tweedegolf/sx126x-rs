@@ -76,7 +76,7 @@ impl TxParams {
     /// By default low power PA and +14 dBm are set.
     pub fn set_power_dbm(mut self, power_dbm: i8) -> Self {
         debug_assert!(power_dbm >= -17);
-        debug_assert!(power_dbm < 22);
+        debug_assert!(power_dbm <= 22);
         self.power_dbm = power_dbm;
         self
     }
