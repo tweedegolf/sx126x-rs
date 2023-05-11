@@ -308,6 +308,19 @@ where
         spi.write(&[0x9D, enable as u8]).map_err(Into::into)
     }
 
+    pub fn get_packet_status<'spu>(
+        &'spu mut self,
+        spi: &'spu mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<PacketStatus, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        let mut result = [NOP; 3];
+        spi.transfer(&mut [0x14, NOP])
+            .and_then(|_| spi.transfer(&mut result))?;
+
+        Ok(result.into())
+    }
+
     /// Configure the dio3 pin as TCXO control switch
     pub fn set_dio3_as_tcxo_ctrl<'spi>(
         &'spi mut self,

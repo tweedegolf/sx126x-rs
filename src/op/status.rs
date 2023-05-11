@@ -85,3 +85,34 @@ impl From<[u8; 7]> for Stats {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct PacketStatus {
+    rssi_pkt: u8,
+    snr_pkt: i8,
+    signal_rssi_pkt: u8,
+}
+
+impl From<[u8; 3]> for PacketStatus {
+    fn from(b: [u8; 3]) -> Self {
+        Self {
+            rssi_pkt: b[0],
+            snr_pkt: i8::from_be_bytes([b[1]]),
+            signal_rssi_pkt: b[2],
+        }
+    }
+}
+
+impl PacketStatus {
+    pub fn rssi_pkt(&self) -> f32 {
+        self.rssi_pkt as f32 / -2.0
+    }
+
+    pub fn snr_pkt(&self) -> f32 {
+        self.snr_pkt as f32 / 4.0
+    }
+
+    pub fn signal_rssi_pkt(&self) -> f32 {
+        self.signal_rssi_pkt as f32 / -2.0
+    }
+}
