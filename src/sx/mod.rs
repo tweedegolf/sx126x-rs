@@ -83,6 +83,10 @@ where
         // 3. Define the RF frequency with the command SetRfFrequency(...)
         self.set_rf_frequency(spi, delay, conf.rf_freq)?;
 
+        if let Some((tcxo_voltage, tcxo_delay)) = conf.tcxo_opts {
+            self.set_dio3_as_tcxo_ctrl(spi, delay, tcxo_voltage, tcxo_delay)?;
+        }
+
         // Calibrate
         self.calibrate(spi, delay, conf.calib_param)?;
         self.calibrate_image(
