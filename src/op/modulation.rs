@@ -23,6 +23,22 @@ pub mod lora {
         SF12 = 0x0C,
     }
 
+    impl From<u8> for LoRaSpreadFactor {
+        fn from(value: u8) -> Self {
+            match value {
+                0x05 => Self::SF5,
+                0x06 => Self::SF6,
+                0x07 => Self::SF7,
+                0x08 => Self::SF8,
+                0x09 => Self::SF9,
+                0x0A => Self::SF10,
+                0x0B => Self::SF11,
+                0x0C => Self::SF12,
+                _ => panic!("Invalid LoRa spread factor"),
+            }
+        }
+    }
+
     #[derive(Copy, Clone)]
     #[repr(u8)]
     pub enum LoRaBandWidth {
