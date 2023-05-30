@@ -596,7 +596,7 @@ where
     }
 
     /// Busily wait for the busy pin to go low
-    fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
+    pub fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns
         delay.delay_us(1);
         while let Ok(true) = self.busy_pin.is_high() {
