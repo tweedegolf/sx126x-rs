@@ -83,6 +83,10 @@ where
         // 3. Define the RF frequency with the command SetRfFrequency(...)
         self.set_rf_frequency(spi, delay, conf.rf_freq)?;
 
+        if let Some((tcxo_voltage, tcxo_delay)) = conf.tcxo_opts {
+            self.set_dio3_as_tcxo_ctrl(spi, delay, tcxo_voltage, tcxo_delay)?;
+        }
+
         // Calibrate
         self.calibrate(spi, delay, conf.calib_param)?;
         self.calibrate_image(
@@ -181,6 +185,29 @@ where
             .and_then(|_| spi.transfer(&mut result))?;
 
         Ok(result[0].into())
+    }
+
+    pub fn set_fs<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<(), SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay).unwrap();
+        spi.transfer(&mut [0xC1])?;
+        Ok(())
+    }
+
+    pub fn get_stats<'spi>(
+        &'spi mut self,
+        spi: &'spi mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<Stats, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        let mut result = [NOP; 7];
+        spi.transfer(&mut [0x10])
+            .and_then(|_| spi.transfer(&mut result))?;
+
+        Ok(result.into())
     }
 
     /// Calibrate image
@@ -283,6 +310,19 @@ where
     ) -> Result<(), SxError<TSPIERR, TPINERR>> {
         let mut spi = self.slave_select(spi, delay)?;
         spi.write(&[0x9D, enable as u8]).map_err(Into::into)
+    }
+
+    pub fn get_packet_status<'spu>(
+        &'spu mut self,
+        spi: &'spu mut TSPI,
+        delay: &mut impl DelayUs<u32>,
+    ) -> Result<PacketStatus, SxError<TSPIERR, TPINERR>> {
+        let mut spi = self.slave_select(spi, delay)?;
+        let mut result = [NOP; 3];
+        spi.transfer(&mut [0x14, NOP])
+            .and_then(|_| spi.transfer(&mut result))?;
+
+        Ok(result.into())
     }
 
     /// Configure the dio3 pin as TCXO control switch
@@ -556,7 +596,7 @@ where
     }
 
     /// Busily wait for the busy pin to go low
-    fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
+    pub fn wait_on_busy(&mut self, delay: &mut impl DelayUs<u32>) -> Result<(), PinError<TPINERR>> {
         // 8.3.1: The max value for T SW from NSS rising edge to the BUSY rising edge is, in all cases, 600 ns
         delay.delay_us(1);
         while let Ok(true) = self.busy_pin.is_high() {
@@ -566,7 +606,7 @@ where
     }
 
     /// Busily wait for the dio1 pin to go high
-    fn wait_on_dio1(&mut self)-> Result<(), PinError<TPINERR>> {
+    fn wait_on_dio1(&mut self) -> Result<(), PinError<TPINERR>> {
         while let Ok(true) = self.dio1_pin.is_low() {
             cortex_m::asm::nop();
         }

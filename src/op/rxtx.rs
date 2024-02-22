@@ -16,6 +16,10 @@ impl RxTxTimeout {
         let inner = [inner[2], inner[1], inner[0]];
         Self { inner }
     }
+
+    pub const fn continuous_rx() -> Self {
+        Self { inner: [0xFF, 0xFF, 0xFF] }
+    }
 }
 
 impl From<u32> for RxTxTimeout {
@@ -76,7 +80,7 @@ impl TxParams {
     /// By default low power PA and +14 dBm are set.
     pub fn set_power_dbm(mut self, power_dbm: i8) -> Self {
         debug_assert!(power_dbm >= -17);
-        debug_assert!(power_dbm < 22);
+        debug_assert!(power_dbm <= 22);
         self.power_dbm = power_dbm;
         self
     }
@@ -134,6 +138,7 @@ impl PaConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct RxBufferStatus {
     payload_length_rx: u8,
     rx_start_buffer_pointer: u8,
