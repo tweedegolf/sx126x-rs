@@ -69,10 +69,10 @@ impl Status {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Stats {
-    status: Status,
-    rx_pkt: u16,
-    crc_error: u16,
-    header_error: u16,
+    pub status: Status,
+    pub rx_pkt: u16,
+    pub crc_error: u16,
+    pub header_error: u16,
 }
 
 impl From<[u8; 7]> for Stats {
