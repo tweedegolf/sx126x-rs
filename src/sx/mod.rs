@@ -64,42 +64,54 @@ where
     pub fn init(&mut self, spi: &mut TSPI, conf: Config) -> Result<(), SxError<TSPIERR, TPINERR>> {
         // Reset the sx
         self.reset(spi)?;
+        self.wait_on_busy(spi)?;
 
         // 1. If not in STDBY_RC mode, then go to this mode with the command SetStandby(...)
         self.set_standby(spi, crate::op::StandbyConfig::StbyRc)?;
+        self.wait_on_busy(spi)?;
 
         // 2. Define the protocol (LoRa® or FSK) with the command SetPacketType(...)
         self.set_packet_type(spi, conf.packet_type)?;
+        self.wait_on_busy(spi)?;
 
         // 3. Define the RF frequency with the command SetRfFrequency(...)
         self.set_rf_frequency(spi, conf.rf_freq)?;
+        self.wait_on_busy(spi)?;
 
         if let Some((tcxo_voltage, tcxo_delay)) = conf.tcxo_opts {
             self.set_dio3_as_tcxo_ctrl(spi, tcxo_voltage, tcxo_delay)?;
+            self.wait_on_busy(spi)?;
         }
 
         // Calibrate
         self.calibrate(spi, conf.calib_param)?;
+        self.wait_on_busy(spi)?;
         self.calibrate_image(spi, CalibImageFreq::from_rf_frequency(conf.rf_frequency))?;
+        self.wait_on_busy(spi)?;
 
         // 4. Define the Power Amplifier configuration with the command SetPaConfig(...)
         self.set_pa_config(spi, conf.pa_config)?;
+        self.wait_on_busy(spi)?;
 
         // 5. Define output power and ramping time with the command SetTxParams(...)
         self.set_tx_params(spi, conf.tx_params)?;
+        self.wait_on_busy(spi)?;
 
         // 6. Define where the data payload will be stored with the command SetBufferBaseAddress(...)
         self.set_buffer_base_address(spi, 0x00, 0x00)?;
+        self.wait_on_busy(spi)?;
 
         // 7. Send the payload to the data buffer with the command WriteBuffer(...)
         // This is done later in SX126x::write_bytes
 
         // 8. Define the modulation parameter according to the chosen protocol with the command SetModulationParams(...) 1
         self.set_mod_params(spi, conf.mod_params)?;
+        self.wait_on_busy(spi)?;
 
         // 9. Define the frame format to be used with the command SetPacketParams(...) 2
         if let Some(packet_params) = conf.packet_params {
             self.set_packet_params(spi, packet_params)?;
+            self.wait_on_busy(spi)?;
         }
 
         // 10. Configure DIO and IRQ: use the command SetDioIrqParams(...) to select TxDone IRQ and map this IRQ to a DIO (DIO1,
@@ -111,12 +123,16 @@ where
             conf.dio2_irq_mask,
             conf.dio3_irq_mask,
         )?;
+        self.wait_on_busy(spi)?;
         self.set_dio2_as_rf_switch_ctrl(spi, true)?;
+        self.wait_on_busy(spi)?;
 
         // 11. Define Sync Word value: use the command WriteReg(...) to write the value of the register via direct register access
-        self.set_sync_word(spi, conf.sync_word)
+        self.set_sync_word(spi, conf.sync_word)?;
+        self.wait_on_busy(spi)?;
 
         // The rest of the steps are done by the user
+        Ok(())
     }
 
     /// Set the LoRa Sync word
