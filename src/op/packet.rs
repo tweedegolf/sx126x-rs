@@ -49,19 +49,19 @@ pub mod lora {
         /// preamble length: number of symbols sent as preamble
         /// The preamble length is a 16-bit value which represents
         /// the number of LoRa® symbols which will be sent by the radio.
-        preamble_len: u16, // 1, 2
+        pub preamble_len: u16, // 1, 2
         /// Header type. When the byte headerType is at 0x00,
         /// the payload length, coding rate and the header
         /// CRC will be added to the LoRa® header and transported
         /// to the receiver.
-        header_type: LoRaHeaderType, // 3
+        pub header_type: LoRaHeaderType, // 3
         /// Size of the payload (in bytes) to transmit or maximum size of the
         /// payload that the receiver can accept.
-        payload_len: u8, // 4
+        pub payload_len: u8, // 4
         /// CRC type
-        crc_type: LoRaCrcType, // 5
+        pub crc_type: LoRaCrcType, // 5
         /// Invert IW
-        invert_iq: LoRaInvertIq,
+        pub invert_iq: LoRaInvertIq,
     }
 
     impl Into<PacketParams> for LoRaPacketParams {
