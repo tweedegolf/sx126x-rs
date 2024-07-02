@@ -9,13 +9,15 @@ pub struct PacketParams {
     inner: [u8; 9],
 }
 
-impl Into<[u8; 9]> for PacketParams {
-    fn into(self) -> [u8; 9] {
-        self.inner
+impl From<PacketParams> for [u8; 9] {
+    fn from(val: PacketParams) -> Self {
+        val.inner
     }
 }
 
-pub mod lora {
+pub use lora::*;
+
+mod lora {
     use super::PacketParams;
 
     #[repr(u8)]
@@ -64,18 +66,18 @@ pub mod lora {
         pub invert_iq: LoRaInvertIq,
     }
 
-    impl Into<PacketParams> for LoRaPacketParams {
-        fn into(self) -> PacketParams {
-            let preamble_len = self.preamble_len.to_be_bytes();
+    impl From<LoRaPacketParams> for PacketParams {
+        fn from(val: LoRaPacketParams) -> Self {
+            let preamble_len = val.preamble_len.to_be_bytes();
 
             PacketParams {
                 inner: [
                     preamble_len[0],
                     preamble_len[1],
-                    self.header_type as u8,
-                    self.payload_len,
-                    self.crc_type as u8,
-                    self.invert_iq as u8,
+                    val.header_type as u8,
+                    val.payload_len,
+                    val.crc_type as u8,
+                    val.invert_iq as u8,
                     0x00,
                     0x00,
                     0x00,

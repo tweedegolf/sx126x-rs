@@ -3,9 +3,9 @@ pub struct RxTxTimeout {
     inner: [u8; 3],
 }
 
-impl Into<[u8; 3]> for RxTxTimeout {
-    fn into(self) -> [u8; 3] {
-        self.inner
+impl From<RxTxTimeout> for [u8; 3] {
+    fn from(val: RxTxTimeout) -> Self {
+        val.inner
     }
 }
 
@@ -66,9 +66,9 @@ impl Default for TxParams {
     }
 }
 
-impl Into<[u8; 2]> for TxParams {
-    fn into(self) -> [u8; 2] {
-        [self.power_dbm as u8, self.ramp_time as u8]
+impl From<TxParams> for [u8; 2] {
+    fn from(val: TxParams) -> Self {
+        [val.power_dbm as u8, val.ramp_time as u8]
     }
 }
 
@@ -105,9 +105,9 @@ pub struct PaConfig {
     device_sel: DeviceSel,
 }
 
-impl Into<[u8; 4]> for PaConfig {
-    fn into(self) -> [u8; 4] {
-        [self.pa_duty_cycle, self.hp_max, self.device_sel as u8, 0x01]
+impl From<PaConfig> for [u8; 4] {
+    fn from(val: PaConfig) -> Self {
+        [val.pa_duty_cycle, val.hp_max, val.device_sel as u8, 0x01]
     }
 }
 

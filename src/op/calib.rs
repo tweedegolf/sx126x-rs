@@ -3,9 +3,9 @@ pub struct CalibParam {
     inner: u8,
 }
 
-impl Into<u8> for CalibParam {
-    fn into(self) -> u8 {
-        self.inner
+impl From<CalibParam> for u8 {
+    fn from(val: CalibParam) -> Self {
+        val.inner
     }
 }
 
@@ -25,7 +25,7 @@ impl CalibParam {
         adc_bulk_p_en: bool,
         image_en: bool,
     ) -> Self {
-        let inner = (rc64k_en as u8) << 0
+        let inner = (rc64k_en as u8)
             | (rc13_en as u8) << 1
             | (pll_en as u8) << 2
             | (adc_pulse_en as u8) << 3
@@ -50,9 +50,9 @@ pub enum CalibImageFreq {
     MHz902_928 = 0xE1_E9,
 }
 
-impl Into<[u8; 2]> for CalibImageFreq {
-    fn into(self) -> [u8; 2] {
-        (self as u16).to_be_bytes()
+impl From<CalibImageFreq> for [u8; 2] {
+    fn from(val: CalibImageFreq) -> Self {
+        (val as u16).to_be_bytes()
     }
 }
 

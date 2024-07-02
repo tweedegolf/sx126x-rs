@@ -224,8 +224,8 @@ where
             Operation::Write(data),
         ];
 
-        let r = self.spi.transaction(&mut ops).map_err(SpiError::Write)?;
-        Ok(r)
+        self.spi.transaction(&mut ops).map_err(SpiError::Write)?;
+        Ok(())
     }
 
     /// Read data from a register
@@ -235,7 +235,7 @@ where
         start_addr: u16,
         result: &mut [u8],
     ) -> Result<(), SxError<TSPIERR, TPINERR>> {
-        debug_assert!(result.len() >= 1);
+        debug_assert!(!result.is_empty());
         let start_addr = start_addr.to_be_bytes();
 
         let mut ops = [
@@ -497,15 +497,14 @@ where
     /// puts the device in TX mode, and waits until the devices
     /// is done sending the data or a timeout occurs.
     /// Please note that this method updates the packet params
-    pub fn write_bytes<'spi, 'data>(
+    pub fn write_bytes(
         &mut self,
-
-        data: &'data [u8],
+        data: &[u8],
         timeout: RxTxTimeout,
         preamble_len: u16,
-        crc_type: packet::lora::LoRaCrcType,
+        crc_type: packet::LoRaCrcType,
     ) -> Result<Status, SxError<TSPIERR, TPINERR>> {
-        use packet::lora::LoRaPacketParams;
+        use packet::LoRaPacketParams;
         // Write data to buffer
         self.write_buffer(0x00, data)?;
 

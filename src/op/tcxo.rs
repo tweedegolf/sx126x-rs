@@ -16,9 +16,9 @@ pub struct TcxoDelay {
     inner: [u8; 3],
 }
 
-impl Into<[u8; 3]> for TcxoDelay {
-    fn into(self) -> [u8; 3] {
-        self.inner
+impl From<TcxoDelay> for [u8; 3] {
+    fn from(val: TcxoDelay) -> Self {
+        val.inner
     }
 }
 

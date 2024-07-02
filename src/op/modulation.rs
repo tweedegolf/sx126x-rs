@@ -2,13 +2,15 @@ pub struct ModParams {
     inner: [u8; 8],
 }
 
-impl Into<[u8; 8]> for ModParams {
-    fn into(self) -> [u8; 8] {
-        self.inner
+impl From<ModParams> for [u8; 8] {
+    fn from(val: ModParams) -> Self {
+        val.inner
     }
 }
 
-pub mod lora {
+pub use lora::*;
+
+mod lora {
     use super::ModParams;
     #[derive(Copy, Clone)]
     #[repr(u8)]
@@ -112,14 +114,14 @@ pub mod lora {
         }
     }
 
-    impl Into<ModParams> for LoraModParams {
-        fn into(self) -> ModParams {
+    impl From<LoraModParams> for ModParams {
+        fn from(val: LoraModParams) -> Self {
             ModParams {
                 inner: [
-                    self.spread_factor as u8,
-                    self.bandwidth as u8,
-                    self.coding_rate as u8,
-                    self.low_dr_opt as u8,
+                    val.spread_factor as u8,
+                    val.bandwidth as u8,
+                    val.coding_rate as u8,
+                    val.low_dr_opt as u8,
                     0x00,
                     0x00,
                     0x00,

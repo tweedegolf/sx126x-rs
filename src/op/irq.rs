@@ -39,9 +39,9 @@ impl IrqMask {
     }
 }
 
-impl Into<u16> for IrqMask {
-    fn into(self) -> u16 {
-        self.inner
+impl From<IrqMask> for u16 {
+    fn from(val: IrqMask) -> Self {
+        val.inner
     }
 }
 
