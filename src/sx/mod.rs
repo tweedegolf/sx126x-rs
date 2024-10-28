@@ -386,10 +386,11 @@ where
 
     /// Get the current IRQ status
     pub fn get_irq_status(&mut self) -> Result<IrqStatus, SxError<TSPIERR, TPINERR>> {
-        let mut status = [NOP, NOP];
+        let mut status = [NOP, NOP, NOP];
         let mut ops = [Operation::Write(&[0x12]), Operation::Read(&mut status)];
         self.spi.transaction(&mut ops).map_err(SpiError::Transfer)?;
-        Ok(u16::from_be_bytes(status).into())
+        let irq_status: [u8; 2] = [status[1], status[2]];
+        Ok(u16::from_be_bytes(irq_status).into())
     }
 
     /// Clear the IRQ status
