@@ -336,7 +336,7 @@ where
 
     /// Reset the device py pulling nrst low for a while
     pub fn reset(&mut self) -> Result<(), SxError<TSPIERR, TPINERR>> {
-        cortex_m::interrupt::free(|_| {
+        critical_section::with(|_| {
             self.nrst_pin.set_low().map_err(PinError::Output)?;
             // 8.1: The pin should be held low for typically 100 μs for the Reset to happen
             self.spi
@@ -546,7 +546,7 @@ where
             .transaction(&mut [Operation::DelayNs(1000)])
             .map_err(SpiError::Transfer)?;
         while let Ok(true) = self.busy_pin.is_high() {
-            cortex_m::asm::nop();
+            // NOP
         }
         Ok(())
     }
@@ -554,7 +554,7 @@ where
     /// Busily wait for the dio1 pin to go high
     fn wait_on_dio1(&mut self) -> Result<(), PinError<TPINERR>> {
         while let Ok(true) = self.dio1_pin.is_low() {
-            cortex_m::asm::nop();
+            // NOP
         }
         Ok(())
     }
