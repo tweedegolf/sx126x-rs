@@ -16,7 +16,7 @@ checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
 name = "sx126x"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "critical-section",
  "embedded-hal",
